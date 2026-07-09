@@ -1,0 +1,100 @@
+// =======================================================================================
+//        VOICE_TEST: Basic Sketch to Test DF2301Q Offline Voice Recognition Sensor
+// =======================================================================================
+
+#include "DFRobot_DF2301Q.h"
+
+// I2C communication object for the voice sensor
+DFRobot_DF2301Q_I2C asr;
+
+void setup() 
+{
+    // Initialize Serial Monitor for debugging
+    Serial.begin(115200);
+    while (!Serial);
+    
+    Serial.println(F("\r\n=== Voice Sensor Test Starting ==="));
+
+    // Initialize DF2301Q Sensor via I2C (Pins 20/SDA and 21/SCL on Arduino Mega)
+    Serial.print(F("Initializing DF2301Q Voice Sensor... "));
+    if (!asr.begin()) 
+    {
+        Serial.println(F("FAILED! Check I2C connections (VCC, GND, SDA, SCL)."));
+        while (1); // Halt execution if sensor is not found
+    }
+    Serial.println(F("SUCCESS!"));
+
+    // Configure internal speaker volume (Range: 1 to 10)
+    asr.setVolume(5);
+    
+    // Configure mute mode (0 = Unmuted, 1 = Muted)
+    asr.setMuteMode(0); 
+    
+    // Configure wake time duration in seconds (Time it stays awake after wake word)
+    asr.setWakeTime(15); 
+
+    Serial.println(F("Sensor ready. Say 'Hello Robot'  to wake it up, then say a command."));
+    Serial.println(F("==================================\r\n"));
+}
+
+void loop() 
+{
+    // Check if the sensor has detected any voice command ID
+    uint8_t CMD_ID = asr.getCMDID();
+
+    if (CMD_ID != 0) 
+    {
+        Serial.print(F("Voice Command Detected! ID: "));
+        Serial.println(CMD_ID);
+
+        // Switch case to verify all 17 custom commands
+        switch (CMD_ID) 
+        {
+            case 1: // Wake word
+                Serial.println(F("-> Action: Wake Word Detected (Hello Robot)"));
+                break;
+                
+            case 5:
+                Serial.println(F("-> Action: Command 5 (gira la cabeza)"));
+                break;
+                
+            case 6:
+                Serial.println(F("-> Action: Command 6 (darth vader)"));
+                break;
+                
+            case 7:
+                Serial.println(F("-> Action: Command 7 (abre las pinzas)"));
+                break;
+                
+            case 8:
+                Serial.println(F("-> Action: Command 8 (abre el taser)"));
+                break;
+                
+            case 9:
+                Serial.println(F("-> Action: Command 9 (mensaje de leia)"));
+                break;
+                
+            case 10:
+                Serial.println(F("-> Action: Command 10 (modo alerta)"));
+                break;
+                
+            case 11:
+                Serial.println(F("-> Action: Command 11 (abre el panel de datos)"));
+                break;
+
+            // Fill in cases 2, 3, 4, 12, 13, 14, 15, 16, 17 if you have learned more words
+            case 2: case 3: case 4:
+            case 12: case 13: case 14: case 15: case 16: case 17:
+                Serial.print(F("-> Action: Custom Command ID "));
+                Serial.println(CMD_ID);
+                break;
+                
+            default:
+                Serial.println(F("-> Action: Unknown or unconfigured ID."));
+                break;
+        }
+        Serial.println(F("----------------------------------"));
+    }
+
+    delay(100); // Small stability delay for the loop
+}
