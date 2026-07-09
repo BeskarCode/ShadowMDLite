@@ -1,0 +1,2988 @@
+// =======================================================================================
+//        SHADOW_MD:  Small Handheld Arduino Droid Operating Wand + MarcDuino
+// =======================================================================================
+//                          Last Revised Date: 08/23/2015
+//                             Revised By: vint43
+//                Inspired by the PADAWAN / KnightShade SHADOW effort
+// =======================================================================================
+//
+//         This program is free software: you can redistribute it and/or modify it for
+//         your personal use and the personal use of other astromech club members.  
+//
+//         This program is distributed in the hope that it will be useful 
+//         as a courtesy to fellow astromech club members wanting to develop
+//         their own droid control system.
+//
+//         IT IS OFFERED WITHOUT ANY WARRANTY; without even the implied warranty of
+//         MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+//
+//         You are using this software at your own risk and, as a fellow club member, it is
+//         expected you will have the proper experience / background to handle and manage that 
+//         risk appropriately.  It is completely up to you to insure the safe operation of
+//         your droid and to validate and test all aspects of your droid control system.
+//
+// =======================================================================================
+// ShadowMDLite revision (cleaned MarcDuino config)
+//   - NandoMadrid From https://www.astromech.com.es/
+//   - Removed all unused custom (type=2) MarcDuino functions and related variables.
+//   - Simplified button configuration to use only standard MarcDuino function codes.
+//   - Normalized CONFIGURE blocks and whitespace for easier maintenance.
+//   - Preserved runtime behavior equivalent to the original ShadowMD configuration.
+//   - Added cross-controller L3 combos (Foot arrow + Dome L3, Dome arrow + Foot L3),
+//     default 0 = FREE; same CONFIGURE comment pattern as other buttons. CheatSheet updated.
+//   - Added Dome L2 modifier combos (L2 + arrow, and L2 + arrow + Foot CROSS/CIRCLE),
+//     default 0 = FREE; CheatSheet updated.
+//   - Changelog note: DOME + L2 expands the available FREE slots without affecting existing commands.
+// =======================================================================================
+//   Note: You will need a Arduino Mega ADK rev3 to run this sketch,
+//   as a normal Arduino (Uno, Duemilanove etc.) doesn't have enough SRAM and FLASH
+//
+//   This is written to be a SPECIFIC Sketch - supporting only one type of controller
+//      - PS3 Move Navigation + MarcDuino Dome Controller & Optional Body Panel Controller
+//
+//   PS3 Bluetooth library - developed by Kristian Lauszus (kristianl@tkjelectronics.com)
+//   For more information visit my blog: http://blog.tkjelectronics.dk/ or
+//
+//   Sabertooth (Foot Drive):
+//         Set Sabertooth 2x32 or 2x25 Dip Switches: 1 and 2 Down, All Others Up
+//
+//   SyRen 10 Dome Drive:
+//         For SyRen packetized Serial Set Switches: 1, 2 and 4 Down, All Others Up
+//         NOTE:  Support for SyRen Simple Serial has been removed, due to problems.
+//         Please contact DimensionEngineering to get an RMA to flash your firmware
+//         Some place a 10K ohm resistor between S1 & GND on the SyRen 10 itself
+//
+// =======================================================================================
+//
+// ---------------------------------------------------------------------------------------
+//                        General User Settings
+// ---------------------------------------------------------------------------------------
+
+
+String PS3ControllerFootMac = "E0:AE:5E:C2:22:45";  //Set this to your FOOT PS3 controller MAC address
+String PS3ControllerDomeMAC = "E0:AE:5E:8E:E9:AA";  //Set to a secondary DOME PS3 controller MAC address (Optional)
+
+String PS3ControllerBackupFootMac = "00:06:F5:51:6B:DC";  //3Set to the MAC Address of your BACKUP FOOT controller (Optional)
+String PS3ControllerBackupDomeMAC = "E0:AE:5E:1C:9D:20";  //4Set to the MAC Address of your BACKUP DOME controller (Optional)
+
+byte drivespeed1 = 70;   //For Speed Setting (Normal): set this to whatever speeds works for you. 0-stop, 127-full speed.
+byte drivespeed2 = 110;  //For Speed Setting (Over Throttle): set this for when needing extra power. 0-stop, 127-full speed.
+byte turnspeed = 50;      // the higher this number the faster it will spin in place, lower - the easier to control.
+                         // Recommend beginner: 40 to 50, experienced: 50+, I like 75
+
+byte domespeed = 110;    // If using a speed controller for the dome, sets the top speed
+                         // Use a number up to 127
+
+byte ramping = 1;        // Ramping- the lower this number the longer R2 will take to speedup or slow down,
+                         // change this by increments of 1
+
+byte joystickFootDeadZoneRange = 15;  // For controllers that centering problems, use the lowest number with no drift
+byte joystickDomeDeadZoneRange = 10;  // For controllers that centering problems, use the lowest number with no drift
+
+byte driveDeadBandRange = 10;     // Used to set the Sabertooth DeadZone for foot motors
+
+int invertTurnDirection = 1;    // This may need to be set to 1 for some configurations
+int invertDriveDirection = 1;  // This may need to be set to 1 for some configurations
+int invertDomeDirection = -1;   // This may need to be set to 1 for some configurations
+
+byte domeAutoSpeed = 100;     // Speed used when dome automation is active - Valid Values: 50 - 100
+int time360DomeTurn = 6000;  // milliseconds for dome to complete 360 turn at domeAutoSpeed - Valid Values: 2000 - 8000 (2000 = 2 seconds)
+//Eebel START
+bool DPLOpen = false;  //Global variable to toggle Data Panel Door so I can use one button to open and close
+bool HoloOn = false;  //Global Variable to toggle Holos On/Off with one button
+bool HoloOn2 = false;  //Global Variable to toggle Holos On/Off with one button
+bool TopUArmOpen = false;
+bool BotUArmOpen = false;
+bool UtilityArmsOpen = false;
+bool LeftDoorOpen = false;
+bool RightDoorOpen = false;
+
+int CurrentSongNum = 0; //First of 5 Custom Song MP3 Files stats at zero, the first increment will make it 1.
+int CustomSongMax = 8; //Total Number of Custom Songs
+//Eebel END
+
+#define ENABLE_UHS_DEBUGGING 1
+#define SHADOW_DEBUG        // uncomment this for console DEBUG output
+#define SHADOW_VERBOSE      // uncomment this for console VERBOSE output
+//#define CANBUS              // uncomment this for CANBUS enabled astromech 
+
+// PC -> MarcDuino forwarding por USB/Serial (opcional).
+// Comandos (una línea por comando):
+//   S1:<COMANDO>  -> reenvía a Serial1
+//   S3:<COMANDO>  -> reenvía a Serial3
+// Ejemplo: S1::SE01  (la app/monitor serie puede enviar \n; el firmware añade \r automáticamente)
+#define ENABLE_PC_TO_MARCDUINO_FORWARDING 1
+
+// ---------------------------------------------------------------------------------------
+//                          MarcDuino Button Settings
+// ---------------------------------------------------------------------------------------
+// Std MarcDuino Function Codes:
+//     1 = Close All Panels
+//     2 = Scream - all panels open
+//     3 = Wave, One Panel at a time
+//     4 = Fast (smirk) back and forth wave
+//     5 = Wave 2, Open progressively all panels, then close one by one
+//     6 = Beep cantina - w/ marching ants panel action
+//     7 = Toggle Utility Arms On/Off
+//     8 = Cantina Dance - orchestral, rhythmic panel dance
+//     9 = Leia message
+//    10 = Disco
+//    11 = Quite mode reset (panel close, stop holos, stop sounds)
+//    12 = Full Awake mode reset (panel close, rnd sound, holo move,holo lights off)
+//    13 = Mid Awake mode reset (panel close, rnd sound, stop holos)
+//    14 = Full Awake+ reset (panel close, rnd sound, holo move, holo lights on)
+//    15 = Scream, with all panels open (NO SOUND)
+//    16 = Wave, one panel at a time (NO SOUND)
+//    17 = Fast (smirk) back and forth (NO SOUND)
+//    18 = Wave 2 (Open progressively, then close one by one) (NO SOUND)
+//    19 = Marching Ants (NO SOUND)
+//    20 = Faint/Short Circuit (NO SOUND)
+//    21 = Rhythmic cantina dance (NO SOUND)
+//    22 = Random Holo Movement On (All) - No other actions
+//    23 = Toggle Front Holo lights On/Off 
+//    24 = Toggle Rear Holo lights On/Off 
+//    25 = Holo reset (motion off, lights off)
+//    26 = Volume Up
+//    27 = Volume Down
+//    28 = Volume Max
+//    29 = Volume Mid
+//    30 = Open All Dome Panels
+//    31 = Open Top Dome Panels
+//    32 = Open Bottom Dome Panels
+//    33 = Close All Dome Panels
+//    34 = Open Dome Panel #1
+//    35 = Close Dome Panel #1
+//    36 = Open Dome Panel #2
+//    37 = Close Dome Panel #2
+//    38 = Open Dome Panel #3
+//    39 = Close Dome Panel #3
+//    40 = Open Dome Panel #4
+//    41 = Close Dome Panel #4
+//    42 = Open Dome Panel #5
+//    43 = Close Dome Panel #5
+//    44 = Open Dome Panel #6
+//    45 = Close Dome Panel #6
+//    46 = Open Dome Panel #7
+//    47 = Close Dome Panel #7
+//    48 = Open Dome Panel #8
+//    49 = Close Dome Panel #8
+//    50 = Open Dome Panel #9
+//    51 = Close Dome Panel #9
+//    52 = Open Dome Panel #10
+//    53 = Close Dome Panel #10
+//   *** BODY PANEL OPTIONS ASSUME SECOND MARCDUINO MASTER BOARD ON MEGA ADK SERIAL #3 ***
+//    54 = Open All Body Panels
+//    55 = Close All Body Panels
+//    56 = Open Body Panel #1
+//    57 = Close Body Panel #1
+//    58 = Open Body Panel #2
+//    59 = Close Body Panel #2
+//    60 = Open Body Panel #3
+//    61 = Close Body Panel #3
+//    62 = Open Body Panel #4
+//    63 = Close Body Panel #4
+//    64 = Open Body Panel #5
+//    65 = Close Body Panel #5
+//    66 = Open Body Panel #6
+//    67 = Close Body Panel #6
+//    68 = Open Body Panel #7
+//    69 = Close Body Panel #7
+//    70 = Open Body Panel #8
+//    71 = Close Body Panel #8
+//    72 = Open Body Panel #9
+//    73 = Close Body Panel #9
+//    74 = Open Body Panel #10
+//    75 = Close Body Panel #10
+//   *** MAGIC PANEL LIGHTING COMMANDS
+//    76 = Magic Panel ON
+//    77 = Magic Panel OFF
+//    78 = Magic Panel Flicker (10 seconds)
+//   ***  Tim Ebel addons
+//    79 = Eebel Sppok Wave Dome and body
+//    80 = Eebel Wave Bye and WaveByeSound
+//    81 = Eebel Utility Arms Open and then Close
+//    82 = Eebel Open all Body Doors, raise arms, operate tools, lower arms close all doors
+//    83 = Eebel Use Gripper
+//    84 = Eebel Use INterface Tool
+//    85 = Eebel Ping Pong Body Doors
+//    86 = Eebel Star Wars Disco Dance
+//    87 = Eebel Star Trek Disco Dance (Wrong franchise! I know, right?)
+//    88 = Eebel Play Next Song
+//    89 = Eebel Play Previous Song
+
+//----------------------------------------------------
+// CONFIGURE: The FOOT Navigation Controller Buttons
+//----------------------------------------------------
+
+//---------------------------------
+// CONFIGURE: Arrow Up
+//---------------------------------
+int footBtnUp_MD_func = 2; // 2 = Scream - all panels open
+
+//---------------------------------
+// CONFIGURE: Arrow Left
+//---------------------------------
+int footBtnLeft_MD_func = 13; // 13 = Mid Awake mode reset (panel close, rnd sound, stop holos)
+
+//---------------------------------
+// CONFIGURE: Arrow Right
+//---------------------------------
+int footBtnRight_MD_func = 14; // 14 = Full Awake+ reset (panel close, rnd sound, holo move, holo lights on)
+
+//---------------------------------
+// CONFIGURE: Arrow Down
+//---------------------------------
+//Quiet mode + reset
+int footBtnDown_MD_func = 11; // 11 = Quiet mode reset (panel close, stop holos, stop sounds)
+
+//---------------------------------
+// CONFIGURE: Arrow UP + CROSS
+//---------------------------------
+int footBtnUpCross_MD_func = 26; // 26 = Volume Up
+
+//---------------------------------
+// CONFIGURE: Arrow Left + CROSS
+//---------------------------------
+int footBtnLeftCross_MD_func = 23; // 23 = Holo Lights On (All)
+
+//---------------------------------
+// CONFIGURE: Arrow Right + CROSS
+//---------------------------------
+int footBtnRightCross_MD_func = 24; // 24 = Holo Lights Off (All)
+
+//---------------------------------
+// CONFIGURE: Arrow Down + CROSS
+//---------------------------------
+int footBtnDownCross_MD_func = 27; // 27 = Volume Down
+
+//---------------------------------
+// CONFIGURE: Arrow UP + CIRCLE
+//---------------------------------
+int footBtnUpCircle_MD_func = 16; // 16 = Wave, one panel at a time (NO SOUND)
+
+//---------------------------------
+// CONFIGURE: Arrow Left + CIRCLE
+//---------------------------------
+int footBtnLeftCircle_MD_func = 17; // 17 = Fast (smirk) back and forth (NO SOUND)
+
+//---------------------------------
+// CONFIGURE: Arrow Right + CIRCLE
+//---------------------------------
+int footBtnRightCircle_MD_func = 19; // 19 = Marching Ants (NO SOUND)
+
+//---------------------------------
+// CONFIGURE: Arrow Down + CIRCLE
+//---------------------------------
+int footBtnDownCircle_MD_func = 21; // 21 = Rhythmic cantina dance (NO SOUND)
+
+//---------------------------------
+// CONFIGURE: Arrow UP + PS
+//---------------------------------
+int footBtnUpPS_MD_func = 30; // 30 = Open All Dome Panels
+
+//---------------------------------
+// CONFIGURE: Arrow Left + PS
+//---------------------------------
+int footBtnLeftPS_MD_func = 89; // 89 = Eebel Play Previous Song
+
+//---------------------------------
+// CONFIGURE: Arrow Right + PS
+//---------------------------------
+int footBtnRightPS_MD_func = 88; // 88 = Eebel Play Next Song (was 0 - Utility Arms Open, then Close)
+
+//---------------------------------
+// CONFIGURE: Arrow Down + PS
+//---------------------------------
+int footBtnDownPS_MD_func = 33; // 33 = Close All Dome Panels
+
+//---------------------------------
+// CONFIGURE: Arrow Up + L1
+//---------------------------------
+int footBtnUpL1_MD_func = 9; // 9 = Leia message
+
+//---------------------------------
+// CONFIGURE: Arrow Left + L1
+//---------------------------------
+int footBtnLeftL1_MD_func = 3; // 3 = Wave, One Panel at a time
+
+//---------------------------------
+// CONFIGURE: Arrow Right + L1
+//---------------------------------
+int footBtnRightL1_MD_func = 5; // 5 = Wave 2, Open progressively all panels, then close one by one
+
+//---------------------------------
+// CONFIGURE: Arrow Down + L1
+//---------------------------------
+int footBtnDownL1_MD_func = 20; //0 = FREE
+
+//---------------------------------
+// CONFIGURE: Arrow Up + L3 (Foot arrow + Dome L3, cross-controller)
+//---------------------------------
+int footBtnUpL3_MD_func = 0; // 0 = FREE
+
+//---------------------------------
+// CONFIGURE: Arrow Down + L3 (Foot arrow + Dome L3, cross-controller)
+//---------------------------------
+int footBtnDownL3_MD_func = 0; // 0 = FREE
+
+//---------------------------------
+// CONFIGURE: Arrow Left + L3 (Foot arrow + Dome L3, cross-controller)
+//---------------------------------
+int footBtnLeftL3_MD_func = 0; // 0 = FREE
+
+//---------------------------------
+// CONFIGURE: Arrow Right + L3 (Foot arrow + Dome L3, cross-controller)
+//---------------------------------
+int footBtnRightL3_MD_func = 0; // 0 = FREE
+
+//----------------------------------------------------
+// CONFIGURE: The DOME Navigation Controller Buttons
+//----------------------------------------------------
+
+
+//---------------------------------
+// CONFIGURE: Arrow Up
+//---------------------------------
+int domeBtnUp_MD_func = 82;  // 82 = Eebel Open all Body Doors, raise arms, operate tools, lower arms close all doors
+
+//---------------------------------
+// CONFIGURE: Arrow Left
+//---------------------------------
+int domeBtnLeft_MD_func = 84;  // 84 = Eebel Use Interface Tool
+
+//---------------------------------
+// CONFIGURE: Arrow Right
+//---------------------------------
+int domeBtnRight_MD_func = 83; // 83 = Eebel Use Gripper
+
+//---------------------------------
+// CONFIGURE: Arrow Down
+//---------------------------------
+int domeBtnDown_MD_func = 56;  // 56 = Open Body Panel #1 (Data Panel Door toggle in this build)
+
+//---------------------------------
+// CONFIGURE: Arrow UP + CROSS
+//---------------------------------
+int domeBtnUpCross_MD_func = 7;  // 7 = Faint / Short Circuit
+
+//---------------------------------
+// CONFIGURE: Arrow Left + CROSS
+//---------------------------------
+int domeBtnLeftCross_MD_func = 30;  // 30 = Open All Dome Panels
+
+//---------------------------------
+// CONFIGURE: Arrow Right + CROSS
+//---------------------------------
+int domeBtnRightCross_MD_func = 33;  // 33 = Close All Dome Panels
+
+//---------------------------------
+// CONFIGURE: Arrow Down + CROSS
+//---------------------------------
+int domeBtnDownCross_MD_func = 79;  // 79 = Eebel Spook Wave Dome and Body
+
+//---------------------------------
+// CONFIGURE: Arrow UP + CIRCLE
+//---------------------------------
+int domeBtnUpCircle_MD_func = 8;  // 8 = Cantina Dance - orchestral, rhythmic panel dance
+
+//---------------------------------
+// CONFIGURE: Arrow Left + CIRCLE
+//---------------------------------
+int domeBtnLeftCircle_MD_func = 10;  // 10 = Disco
+
+//---------------------------------
+// CONFIGURE: Arrow Right + CIRCLE
+//---------------------------------
+int domeBtnRightCircle_MD_func = 86;  // 86 = Eebel Star Wars Disco Dance
+
+//---------------------------------
+// CONFIGURE: Arrow Down + CIRCLE
+//---------------------------------
+int domeBtnDownCircle_MD_func = 87;  // 87 = Eebel Star Trek Disco Dance
+
+//---------------------------------
+// CONFIGURE: Arrow UP + PS
+//---------------------------------
+int domeBtnUpPS_MD_func = 81;  // 81 = Eebel Utility Arms Open and then Close
+
+//---------------------------------
+// CONFIGURE: Arrow Left + PS
+//---------------------------------
+int domeBtnLeftPS_MD_func = 58;  // 58 = Open Body Panel #2
+
+//---------------------------------
+// CONFIGURE: Arrow Right + PS
+//---------------------------------
+int domeBtnRightPS_MD_func = 60;  // 60 = Open Body Panel #3
+
+//---------------------------------
+// CONFIGURE: Arrow Down + PS
+//---------------------------------
+int domeBtnDownPS_MD_func = 85;  // 85 = Eebel Ping Pong Body Doors
+
+//---------------------------------
+// CONFIGURE: Arrow Up + L1
+//---------------------------------
+int domeBtnUpL1_MD_func = 4;  // 4 = Fast (smirk) back and forth wave
+
+//---------------------------------
+// CONFIGURE: Arrow Left + L1
+//---------------------------------
+int domeBtnLeftL1_MD_func = 83;  // 83 = Eebel Use Gripper
+
+//---------------------------------
+// CONFIGURE: Arrow Right + L1
+//---------------------------------
+int domeBtnRightL1_MD_func = 84;  // 84 = Eebel Use Interface Tool
+
+//---------------------------------
+// CONFIGURE: Arrow Down + L1
+//---------------------------------
+int domeBtnDownL1_MD_func = 18;  // 18 = Wave 2 (Open progressively, then close one by one) (NO SOUND)
+
+//---------------------------------
+// CONFIGURE: Arrow Up + L2
+//---------------------------------
+int domeBtnUpL2_MD_func = 0; // 0 = FREE
+
+//---------------------------------
+// CONFIGURE: Arrow Down + L2
+//---------------------------------
+int domeBtnDownL2_MD_func = 0; // 0 = FREE
+
+//---------------------------------
+// CONFIGURE: Arrow Left + L2
+//---------------------------------
+int domeBtnLeftL2_MD_func = 0; // 0 = FREE
+
+//---------------------------------
+// CONFIGURE: Arrow Right + L2
+//---------------------------------
+int domeBtnRightL2_MD_func = 0; // 0 = FREE
+
+//---------------------------------
+// CONFIGURE: Arrow Up + L2 + Foot CROSS
+//---------------------------------
+int domeBtnUpL2Cross_MD_func = 0; // 0 = FREE
+
+//---------------------------------
+// CONFIGURE: Arrow Down + L2 + Foot CROSS
+//---------------------------------
+int domeBtnDownL2Cross_MD_func = 0; // 0 = FREE
+
+//---------------------------------
+// CONFIGURE: Arrow Left + L2 + Foot CROSS
+//---------------------------------
+int domeBtnLeftL2Cross_MD_func = 0; // 0 = FREE
+
+//---------------------------------
+// CONFIGURE: Arrow Right + L2 + Foot CROSS
+//---------------------------------
+int domeBtnRightL2Cross_MD_func = 0; // 0 = FREE
+
+//---------------------------------
+// CONFIGURE: Arrow Up + L2 + Foot CIRCLE
+//---------------------------------
+int domeBtnUpL2Circle_MD_func = 0; // 0 = FREE
+
+//---------------------------------
+// CONFIGURE: Arrow Down + L2 + Foot CIRCLE
+//---------------------------------
+int domeBtnDownL2Circle_MD_func = 0; // 0 = FREE
+
+//---------------------------------
+// CONFIGURE: Arrow Left + L2 + Foot CIRCLE
+//---------------------------------
+int domeBtnLeftL2Circle_MD_func = 0; // 0 = FREE
+
+//---------------------------------
+// CONFIGURE: Arrow Right + L2 + Foot CIRCLE
+//---------------------------------
+int domeBtnRightL2Circle_MD_func = 0; // 0 = FREE
+
+//---------------------------------
+// CONFIGURE: Arrow Up + L3 (Dome arrow + Foot L3, cross-controller)
+//---------------------------------
+int domeBtnUpL3_MD_func = 90; // 0 = FREE
+
+//---------------------------------
+// CONFIGURE: Arrow Down + L3 (Dome arrow + Foot L3, cross-controller)
+//---------------------------------
+int domeBtnDownL3_MD_func = 0; // 0 = FREE
+
+//---------------------------------
+// CONFIGURE: Arrow Left + L3 (Dome arrow + Foot L3, cross-controller)
+//---------------------------------
+int domeBtnLeftL3_MD_func = 0; // 0 = FREE
+
+//---------------------------------
+// CONFIGURE: Arrow Right + L3 (Dome arrow + Foot L3, cross-controller)
+//---------------------------------
+int domeBtnRightL3_MD_func = 0; // 0 = FREE
+
+// ---------------------------------------------------------------------------------------
+//               SYSTEM VARIABLES - USER CONFIG SECTION COMPLETED
+// ---------------------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------------------
+//                          Drive Controller Settings
+// ---------------------------------------------------------------------------------------
+
+int motorControllerBaudRate = 9600; // Set the baud rate for the Syren motor controller
+                                    // for packetized options are: 2400, 9600, 19200 and 38400
+
+int marcDuinoBaudRate = 9600; // Set the baud rate for the Syren motor controller
+                                    
+#define SYREN_ADDR         129      // Serial Address for Dome Syren
+#define SABERTOOTH_ADDR    128      // Serial Address for Foot Sabertooth
+
+// #define TEST_CONROLLER 1
+
+// ---------------------------------------------------------------------------------------
+//                          Libraries
+// ---------------------------------------------------------------------------------------
+#include <PS3BT.h>
+#include <usbhub.h>
+#include <DFRobot_DF2301Q.h>
+DFRobot_DF2301Q_I2C asr;      // I2C communication object for the sensor
+bool voiceActive = false;     // Safety switch: true = listen to voice / false = listen to PS3
+#ifdef CANBUS
+  #include <mcp_can.h>
+  #include <SPI.h>
+  #define CAN0_INT 48 // Set CAN-Interrupt to pin 48
+#endif
+
+// Satisfy IDE, which only needs to see the include statment in the ino.
+#ifdef dobogusinclude
+#include <spi4teensy3.h>
+#endif
+
+#include <Sabertooth.h>
+
+// MarcDuino action table types (must be defined before Arduino IDE generates prototypes)
+typedef boolean (*ActionCheckFn)();
+struct MarcDuinoAction {
+  ActionCheckFn check;
+  int mdFunc; // MarcDuino function code (1–89)
+  const __FlashStringHelper* verbose;
+};
+
+// ---------------------------------------------------------------------------------------
+//                    Panel Management Variables
+// ---------------------------------------------------------------------------------------
+static const uint8_t kDomePanelCount = 10;
+
+// ---------------------------------------------------------------------------------------
+//                          Variables
+// ---------------------------------------------------------------------------------------
+
+long previousDomeMillis = millis();
+long previousFootMillis = millis();
+long previousMarcDuinoMillis = millis();
+long previousDomeToggleMillis = millis();
+long previousSpeedToggleMillis = millis();
+long currentMillis = millis();
+
+int serialLatency = 25;   //This is a delay factor in ms to prevent queueing of the Serial data.
+                          //25ms seems approprate for HardwareSerial, values of 50ms or larger are needed for Softare Emulation
+                          
+int marcDuinoButtonCounter = 0;
+int speedToggleButtonCounter = 0;
+int domeToggleButtonCounter = 0;
+
+Sabertooth *ST=new Sabertooth(SABERTOOTH_ADDR, Serial2);
+Sabertooth *SyR=new Sabertooth(SYREN_ADDR, Serial2);
+
+///////Setup for USB and Bluetooth Devices////////////////////////////
+USB Usb;
+BTD Btd(&Usb);
+PS3BT PS3NavFootImpl(&Btd);
+PS3BT PS3NavDomeImpl(&Btd);
+PS3BT* PS3NavFoot=&PS3NavFootImpl;
+PS3BT* PS3NavDome=&PS3NavDomeImpl;
+
+#ifdef CANBUS
+MCP_CAN CAN0(SS);   // Set CS to pin SS
+#endif
+
+//Used for PS3 Fault Detection
+uint32_t msgLagTime = 0;
+uint32_t lastMsgTime = 0;
+uint32_t currentTime = 0;
+uint32_t lastLoopTime = 0;
+int badPS3Data = 0;
+int badPS3DataDome = 0;
+
+boolean firstMessage = true;
+String output = "";
+
+boolean isFootMotorStopped = true;
+boolean isDomeMotorStopped = true;
+
+boolean overSpeedSelected = false;
+
+boolean isPS3NavigatonInitialized = false;
+boolean isSecondaryPS3NavigatonInitialized = false;
+
+boolean isStickEnabled = true;
+
+boolean WaitingforReconnect = false;
+boolean WaitingforReconnectDome = false;
+
+boolean mainControllerConnected = false;
+boolean domeControllerConnected = false;
+
+// Dome Automation Variables
+boolean domeAutomation = false;
+int domeTurnDirection = 1;  // 1 = positive turn, -1 negative turn
+float domeTargetPosition = 0; // (0 - 359) - degrees in a circle, 0 = home
+unsigned long domeStopTurnTime = 0;    // millis() when next turn should stop
+unsigned long domeStartTurnTime = 0;  // millis() when next turn should start
+int domeStatus = 0;  // 0 = stopped, 1 = prepare to turn, 2 = turning
+
+byte action = 0;
+unsigned long DriveMillis = 0;
+
+int footDriveSpeed = 0;
+
+
+// =======================================================================================
+//                          Main Program
+// =======================================================================================
+
+
+// =======================================================================================
+//                          Initialize - Setup Function
+// =======================================================================================
+void setup()
+{
+    //Debug Serial for use with USB Debugging
+    Serial.begin(115200);
+    while (!Serial);
+    
+    Serial.println("\r\nSystem starting up.\r\n");
+
+    // CAN-Bus
+    #ifdef CANBUS
+      Serial.println("Initializing MCP2515 (CAN-BUS)...");
+  
+    // Initialize MCP2515 running at 8MHz with a baudrate of 125kb/s and the masks and filters disabled.
+    if(CAN0.begin(MCP_STDEXT, CAN_125KBPS, MCP_8MHZ) == CAN_OK)
+      Serial.println("MCP2515 Initialized Successfully!");
+    else
+      Serial.println("Error Initializing MCP2515...");
+
+    // Since we do not set NORMAL mode, we are in loopback mode by default.
+    CAN0.setMode(MCP_NORMAL);
+
+    pinMode(CAN0_INT, INPUT);                           // Configuring pin for /INT input
+
+    Serial.println("MCP2515 configured.\r\n");
+
+    #endif
+
+    //Setup for Serial1:: MarcDuino Dome Control Board
+    Serial.print(F("\r\nMarcduino Dome connecting... "));
+    Serial1.begin(marcDuinoBaudRate); 
+    while (!Serial1);
+    Serial.print(F("done.\r\n"));
+
+    //Setup for Serial2:: Motor Controllers - Sabertooth (Feet) 
+    Serial.print(F("\r\nMotor Controller connecting... "));
+    Serial2.begin(motorControllerBaudRate);
+    while (!Serial2);
+    Serial.print(F("done.\r\n"));
+
+    //Setup for Serial3:: Optional MarcDuino Control Board for Body Panels
+    Serial.print(F("\r\nMarcduino Body connecting... "));
+    Serial3.begin(marcDuinoBaudRate);
+    while (!Serial3);
+    Serial.print(F("done.\r\n"));
+
+    //Setup for PS3
+    Serial.print(F("\r\nRegistering Controller Events... "));
+    PS3NavFoot->attachOnInit(onInitPS3NavFoot); // onInitPS3NavFoot is called upon a new connection
+    PS3NavDome->attachOnInit(onInitPS3NavDome); 
+    Serial.print(F("done.\r\n"));
+
+    // Wait for powered up USB-Shield
+    Serial.print(F("\r\nStarting USB... "));
+    if (Usb.Init() == -1)
+    {
+        Serial.print(F("\r\nOSC did not start! - HALT -"));
+        while (1); //halt
+    }
+    Serial.print(F("USB + Bluetooth Library started.\r\n"));
+    Usb.Task();
+
+    output.reserve(200); // Reserve 200 bytes for the output string
+
+    // -----------------------------------------------------------------------------------
+    //Setup for Sabertooth
+    Serial.print(F("\r\nSetting up Sabertooth bus..."));    
+    ST->autobaud();          // Send the autobaud command to the Sabertooth controller(s).
+    ST->setTimeout(10);      //DMB:  How low can we go for safety reasons?  multiples of 100ms
+    ST->setDeadband(driveDeadBandRange);
+    ST->stop(); 
+    SyR->autobaud();
+    SyR->setTimeout(20);      //DMB:  How low can we go for safety reasons?  multiples of 100ms
+    SyR->stop(); 
+    Serial.print(F("done.\r\n"));
+
+// Setup for DF2301Q Offline Voice Recognition Sensor
+    Serial.print(F("\r\nInitializing DF2301Q Voice Sensor... "));
+    if (!asr.begin())
+    {
+        Serial.println(F("Sensor not found! Check I2C connections (Pins 20/21)."));
+    }
+    else
+    {
+        Serial.println(F("done.\r\n"));
+        asr.setVolume(5);     // Speaker volume (1-10)
+        asr.setMuteMode(0);   // 0 = Unmute speaker
+        asr.setWakeTime(15);  // Wake up duration in seconds
+    }
+
+   
+
+    randomSeed(analogRead(0));  // random number seed for dome automation   
+    Serial.print(F("\r\n\r\nEntering Loop."));
+}
+
+// =======================================================================================
+//           Main Program Loop - This is the recurring check loop for entire sketch
+// =======================================================================================
+
+bool LoopMessageSent = false;
+
+#if ENABLE_PC_TO_MARCDUINO_FORWARDING
+// Forward declaration (la definición real está más abajo en el fichero).
+void marcDuinoButtonPush(int type, int MD_func);
+
+static inline void pcTrimRight(char* s)
+{
+  // Remove trailing spaces/tabs.
+  size_t len = strlen(s);
+  while (len > 0 && (s[len - 1] == ' ' || s[len - 1] == '\t'))
+  {
+    s[len - 1] = '\0';
+    len--;
+  }
+}
+
+static void processPCSerialLine(const char* line)
+{
+  // Make a mutable copy for trimming.
+  char buf[160];
+  strncpy(buf, line, sizeof(buf) - 1);
+  buf[sizeof(buf) - 1] = '\0';
+  pcTrimRight(buf);
+
+  // Trim left spaces/tabs.
+  char* p = buf;
+  while (*p == ' ' || *p == '\t') p++;
+
+  if (*p == '\0') return;
+
+  // Lightweight commands for validation.
+  if (!strcmp(p, "HELP") || !strcmp(p, "help"))
+  {
+    Serial.println(F("ShadowMD PC Serial forwarding ON"));
+    Serial.println(F("Use: S1:<COMANDO> or S3:<COMANDO>"));
+    Serial.println(F("Also: MD:<mdFunc> (calls marcDuinoButtonPush(1, mdFunc))"));
+    Serial.println(F("Example: S1::SE01"));
+    return;
+  }
+
+  if (!strcmp(p, "PING") || !strcmp(p, "ping"))
+  {
+    Serial.println(F("PONG"));
+    return;
+  }
+
+  // High-level command: MD:<mdFunc>
+  if ((p[0] == 'M' || p[0] == 'm') && (p[1] == 'D' || p[1] == 'd') && p[2] == ':')
+  {
+    const char* payload = p + 3;
+    while (*payload == ' ' || *payload == '\t') payload++;
+    if (*payload == '\0')
+    {
+      Serial.println(F("ERR Missing mdFunc"));
+      return;
+    }
+
+    char* endPtr = NULL;
+    long mdFunc = strtol(payload, &endPtr, 10);
+    if (endPtr == payload)
+    {
+      Serial.println(F("ERR Invalid mdFunc"));
+      return;
+    }
+
+    if (mdFunc < 0 || mdFunc > 99)
+    {
+      Serial.println(F("ERR mdFunc out of range (0-89)"));
+      return;
+    }
+
+    // Allow trailing spaces (already trimmed-right, but be defensive).
+    while (*endPtr == ' ' || *endPtr == '\t') endPtr++;
+    if (*endPtr != '\0')
+    {
+      Serial.println(F("ERR Unexpected characters after mdFunc"));
+      return;
+    }
+
+    // Keep MarcDuino Serial RX buffers clear right before sending actions.
+    while (Serial1.available()) Serial1.read();
+    while (Serial3.available()) Serial3.read();
+
+    marcDuinoButtonPush(1, (int)mdFunc);
+    Serial.print(F("OK marcDuinoButtonPush(1, "));
+    Serial.print(mdFunc);
+    Serial.println(F(")"));
+    return;
+  }
+
+  // Routing: S1:<COMANDO> or S3:<COMANDO>
+  // Supports command strings that already begin with ':' (as in MarcDuino protocol).
+  if ((p[0] == 'S' || p[0] == 's') && (p[1] == '1' || p[1] == '3') && p[2] == ':')
+  {
+    int targetPort = (p[1] == '1') ? 1 : 3;
+
+    const char* payload = p + 3; // after "S1:" / "S3:"
+    while (*payload == ' ' || *payload == '\t') payload++;
+    if (*payload == '\0')
+    {
+      Serial.println(F("ERR Empty command payload"));
+      return;
+    }
+
+    // Copy payload to command buffer.
+    char cmd[180];
+    strncpy(cmd, payload, sizeof(cmd) - 1);
+    cmd[sizeof(cmd) - 1] = '\0';
+    pcTrimRight(cmd);
+
+    size_t n = strlen(cmd);
+    if (n == 0)
+    {
+      Serial.println(F("ERR Empty command after trimming"));
+      return;
+    }
+
+    // Ensure command ends with carriage return required by MarcDuino syntax.
+    if (cmd[n - 1] != '\r')
+    {
+      if (n + 1 >= sizeof(cmd))
+      {
+        Serial.println(F("ERR Command too long"));
+        return;
+      }
+      cmd[n] = '\r';
+      cmd[n + 1] = '\0';
+    }
+
+    if (targetPort == 1)
+      Serial1.print(cmd);
+    else
+      Serial3.print(cmd);
+
+    Serial.print(F("OK forwarded to "));
+    Serial.println(targetPort == 1 ? F("Serial1") : F("Serial3"));
+    return;
+  }
+
+  Serial.println(F("ERR formato. Use S1:<COMANDO> o S3:<COMANDO>. Ej: S1::SE01"));
+}
+
+static void processPCSerial()
+{
+  // Read by lines: user can send \n or \r\n; both are accepted.
+  static char lineBuf[160];
+  static uint8_t lineLen = 0;
+
+  while (Serial.available() > 0)
+  {
+    char c = (char)Serial.read();
+
+    // End-of-line markers.
+    if (c == '\n' || c == '\r')
+    {
+      if (lineLen > 0)
+      {
+        lineBuf[lineLen] = '\0';
+        processPCSerialLine(lineBuf);
+        lineLen = 0;
+      }
+      else
+      {
+        lineLen = 0;
+      }
+      continue;
+    }
+
+    // Append character.
+    if (lineLen < (sizeof(lineBuf) - 1))
+    {
+      lineBuf[lineLen++] = c;
+    }
+    else
+    {
+      // Overflow: reset buffer to avoid runaway.
+      lineLen = 0;
+    }
+  }
+}
+#endif
+
+void loop()
+{   
+    if (!LoopMessageSent)
+    {
+      Serial.print(F("\r\nInside Loop.\r\n"));
+      LoopMessageSent = true;
+    }
+
+    Usb.Task();
+
+    //Useful to enable with serial console when having controller issues.
+    #ifdef TEST_CONROLLER
+      testPS3Controller();
+    #endif
+
+    //LOOP through functions from highest to lowest priority.
+
+    if ( !readUSB() )
+    {
+      //We have a fault condition that we want to ensure that we do NOT process any controller data!!!
+      printOutput();
+      return;
+    }
+
+#if ENABLE_PC_TO_MARCDUINO_FORWARDING
+    processPCSerial();
+#endif
+    
+    footMotorDrive();
+    domeDrive();
+    marcDuinoDome();
+    marcDuinoFoot();
+    toggleSettings();
+    printOutput();
+        
+    // If dome automation is enabled - Call function
+    if (domeAutomation && time360DomeTurn > 1999 && time360DomeTurn < 8001 && domeAutoSpeed > 49 && domeAutoSpeed < 101)  
+    {
+       autoDome(); 
+    }   
+
+// -----------------------------------------------------------------------------------
+    // Voice Recognition Logic (DF2301Q)
+    // -----------------------------------------------------------------------------------
+    uint8_t CMD_ID = asr.getCMDID();
+
+    if (CMD_ID != 0)
+    {
+        Serial.print(F("Voice Command Received. ID: "));
+        Serial.println(CMD_ID);
+
+        // Only execute actions if Voice Control has been activated via the PS3 Controller
+        if (voiceActive)
+        {
+            switch (CMD_ID)
+            {
+                case 1: // Wake word "Hello Robot" / "Hola R2"
+                    Serial.println(F("-> Droid awoken via voice. Ready."));
+                    break;
+
+                case 5: // "gira la cabeza"
+                    // Trigger dome turn or related automation
+                    break;
+
+                case 6: // "darth vader"
+                    marcDuinoButtonPush(1, 6); // Play Beep Cantina / Imperial march style
+                    break;
+
+                case 7: // "abre las pinzas"
+                    marcDuinoButtonPush(1, 83); // Eebel Use Gripper
+                    break;
+
+                case 8: // "abre el taser"
+                    marcDuinoButtonPush(1, 84); // Eebel Use Interface Tool
+                    break;
+
+                case 9: // "mensaje de leia"
+                    marcDuinoButtonPush(1, 9); // Leia message
+                    break;
+
+                case 10: // "modo alerta"
+                    marcDuinoButtonPush(1, 14); // Full Awake+ reset (panel close, sound, holo move/lights)
+                    break;
+
+                case 11: // "abre el panel de datos"
+                    marcDuinoButtonPush(1, 56); // Open Body Panel #1 (Data Panel Door toggle)
+                    break;
+
+                default:
+                    Serial.println(F("Voice ID recognized but not configured in switch-case."));
+                    break;
+            }
+        }
+        else
+        {
+            Serial.println(F("Voice Command IGNORED (Voice Control Switch is OFF)."));
+        }
+    }
+}
+
+// =======================================================================================
+//           footDrive Motor Control Section
+// =======================================================================================
+
+boolean ps3FootMotorDrive(PS3BT* myPS3 = PS3NavFoot)
+{
+  int stickSpeed = 0;
+  int turnnum = 0;
+  
+  if (isPS3NavigatonInitialized)
+  {    
+      // Additional fault control.  Do NOT send additional commands to Sabertooth if no controllers have initialized.
+      if (!isStickEnabled)
+      {
+            #ifdef SHADOW_VERBOSE
+              if ( abs(myPS3->getAnalogHat(LeftHatY)-128) > joystickFootDeadZoneRange)
+              {
+                output += "Drive Stick is disabled\r\n";
+              }
+            #endif
+
+          stopFootMotorIfRunning();
+          
+          return false;
+
+      } else if (!myPS3->PS3NavigationConnected)
+      {
+        
+          stopFootMotorIfRunning();
+          
+          return false;
+
+          
+      } else if (myPS3->getButtonPress(L2) || myPS3->getButtonPress(L1))
+      {
+        
+          stopFootMotorIfRunning();
+          
+          return false;
+        
+      } else
+      {
+          int joystickPosition = myPS3->getAnalogHat(LeftHatY);
+          
+          if (overSpeedSelected) //Over throttle is selected
+          {
+
+            stickSpeed = (map(joystickPosition, 0, 255, -drivespeed2, drivespeed2));   
+            
+          } else 
+          {
+            
+            stickSpeed = (map(joystickPosition, 0, 255, -drivespeed1, drivespeed1));
+            
+          }          
+
+          if ( abs(joystickPosition-128) < joystickFootDeadZoneRange)
+          {
+  
+                // This is RAMP DOWN code when stick is now at ZERO but prior FootSpeed > 20
+                
+                if (abs(footDriveSpeed) > 50)
+                {   
+                    if (footDriveSpeed > 0)
+                    {
+                        footDriveSpeed -= 3;
+                    } else
+                    {
+                        footDriveSpeed += 3;
+                    }
+                    
+                    #ifdef SHADOW_VERBOSE      
+                        output += "ZERO FAST RAMP: footSpeed: ";
+                        output += footDriveSpeed;
+                        output += "\nStick Speed: ";
+                        output += stickSpeed;
+                        output += "\n\r";
+                    #endif
+                    
+                } else if (abs(footDriveSpeed) > 20)
+                {   
+                    if (footDriveSpeed > 0)
+                    {
+                        footDriveSpeed -= 2;
+                    } else
+                    {
+                        footDriveSpeed += 2;
+                    }
+                    
+                    #ifdef SHADOW_VERBOSE      
+                        output += "ZERO MID RAMP: footSpeed: ";
+                        output += footDriveSpeed;
+                        output += "\nStick Speed: ";
+                        output += stickSpeed;
+                        output += "\n\r";
+                    #endif
+                    
+                } else
+                {        
+                    footDriveSpeed = 0;
+                }
+              
+          } else 
+          {
+      
+              isFootMotorStopped = false;
+              
+              if (footDriveSpeed < stickSpeed)
+              {
+                
+                  if ((stickSpeed-footDriveSpeed)>(ramping+1))
+                  {
+                    footDriveSpeed+=ramping;
+                      
+                    #ifdef SHADOW_VERBOSE      
+                        output += "RAMPING UP: footSpeed: ";
+                        output += footDriveSpeed;
+                        output += "\nStick Speed: ";
+                        output += stickSpeed;
+                        output += "\n\r";
+                    #endif
+                      
+                  } else
+                      footDriveSpeed = stickSpeed;
+                  
+              } else if (footDriveSpeed > stickSpeed)
+              {
+            
+                  if ((footDriveSpeed-stickSpeed)>(ramping+1))
+                  {
+                    
+                    footDriveSpeed-=ramping;
+                      
+                    #ifdef SHADOW_VERBOSE      
+                        output += "RAMPING DOWN: footSpeed: ";
+                        output += footDriveSpeed;
+                        output += "\nStick Speed: ";
+                        output += stickSpeed;
+                        output += "\n\r";
+                    #endif
+                    
+                  } else
+                      footDriveSpeed = stickSpeed;  
+              } else
+              {
+                  footDriveSpeed = stickSpeed;  
+              }
+          }
+          
+          turnnum = (myPS3->getAnalogHat(LeftHatX));
+
+          //TODO:  Is there a better algorithm here?  
+          if ( abs(footDriveSpeed) > 50)
+              turnnum = (map(myPS3->getAnalogHat(LeftHatX), 54, 200, -(turnspeed/4), (turnspeed/4)));
+          else if (turnnum <= 200 && turnnum >= 54)
+              turnnum = (map(myPS3->getAnalogHat(LeftHatX), 54, 200, -(turnspeed/3), (turnspeed/3)));
+          else if (turnnum > 200)
+              turnnum = (map(myPS3->getAnalogHat(LeftHatX), 201, 255, turnspeed/3, turnspeed));
+          else if (turnnum < 54)
+              turnnum = (map(myPS3->getAnalogHat(LeftHatX), 0, 53, -turnspeed, -(turnspeed/3)));
+              
+          if (abs(turnnum) > 5)
+          {
+              isFootMotorStopped = false;   
+          }
+
+          currentMillis = millis();
+          
+          if ( (currentMillis - previousFootMillis) > serialLatency  )
+          {
+
+              if (footDriveSpeed != 0 || abs(turnnum) > 5)
+              {
+                
+                  #ifdef SHADOW_VERBOSE      
+                    output += "Motor: FootSpeed: ";
+                    output += footDriveSpeed;
+                    output += "\nTurnnum: ";              
+                    output += turnnum;
+                    output += "\nTime of command: ";              
+                    output += millis();
+                  #endif
+              
+                  ST->turn(turnnum * invertTurnDirection);
+                  ST->drive(footDriveSpeed * invertDriveDirection);
+                  
+              } else
+              {    
+                  stopFootMotorIfRunning();
+              }
+              
+              // The Sabertooth won't act on mixed mode packet serial commands until
+              // it has received power levels for BOTH throttle and turning, since it
+              // mixes the two together to get diff-drive power levels for both motors.
+              
+              previousFootMillis = currentMillis;
+              return true; //we sent a foot command   
+          }
+      }
+  }
+  return false;
+}
+
+void footMotorDrive()
+{
+
+  //Flood control prevention
+  if ((millis() - previousFootMillis) < serialLatency) return;  
+  
+  if (PS3NavFoot->PS3NavigationConnected) ps3FootMotorDrive(PS3NavFoot);
+  
+}  
+
+
+// =======================================================================================
+//           domeDrive Motor Control Section
+// =======================================================================================
+
+int ps3DomeDrive(PS3BT* myPS3 = PS3NavDome)
+{
+    int domeRotationSpeed = 0;
+      
+    int joystickPosition = myPS3->getAnalogHat(LeftHatX);
+        
+    domeRotationSpeed = (map(joystickPosition, 0, 255, -domespeed, domespeed));
+        
+    if ( abs(joystickPosition-128) < joystickDomeDeadZoneRange ) 
+       domeRotationSpeed = 0;
+          
+    if (domeRotationSpeed != 0 && domeAutomation == true)  // Turn off dome automation if manually moved
+    {   
+            domeAutomation = false; 
+            domeStatus = 0;
+            domeTargetPosition = 0; 
+            
+            #ifdef SHADOW_VERBOSE
+              output += "Dome Automation OFF\r\n";
+            #endif
+
+    }    
+    
+    return domeRotationSpeed;
+}
+
+void rotateDome(int domeRotationSpeed, String mesg)
+{
+    //Constantly sending commands to the SyRen (Dome) is causing foot motor delay.
+    //Lets reduce that chatter by trying 3 things:
+    // 1.) Eliminate a constant stream of "don't spin" messages (isDomeMotorStopped flag)
+    // 2.) Add a delay between commands sent to the SyRen (previousDomeMillis timer)
+    // 3.) Switch to real UART on the MEGA (Likely the *CORE* issue and solution)
+    // 4.) Reduce the timout of the SyRen - just better for safety!
+    
+    currentMillis = millis();
+    if ( (!isDomeMotorStopped || domeRotationSpeed != 0) && ((currentMillis - previousDomeMillis) > (2*serialLatency) )  )
+    {
+      
+          if (domeRotationSpeed != 0)
+          {
+            
+            isDomeMotorStopped = false;
+            
+            #ifdef SHADOW_VERBOSE      
+                output += "Dome rotation speed: ";
+                output += domeRotationSpeed;
+            #endif
+        
+            SyR->motor(domeRotationSpeed*(invertDomeDirection));
+            
+          } else
+          {
+            isDomeMotorStopped = true; 
+            
+            #ifdef SHADOW_VERBOSE      
+                output += "\n\r***Dome motor is STOPPED***\n\r";
+            #endif
+            
+            SyR->stop();
+          }
+          
+          previousDomeMillis = currentMillis;      
+    }
+}
+
+void domeDrive()
+{
+  //Flood control prevention
+  //This is intentionally set to double the rate of the Dome Motor Latency
+  if ((millis() - previousDomeMillis) < (2*serialLatency) ) return;  
+  
+  int domeRotationSpeed = 0;
+  int ps3NavControlSpeed = 0;
+  
+  if (PS3NavDome->PS3NavigationConnected) 
+  {
+    
+     ps3NavControlSpeed = ps3DomeDrive(PS3NavDome);
+
+     domeRotationSpeed = ps3NavControlSpeed; 
+
+     rotateDome(domeRotationSpeed,"Controller Move");
+    
+  } else if (PS3NavFoot->PS3NavigationConnected && PS3NavFoot->getButtonPress(L2))
+  {
+    
+     ps3NavControlSpeed = ps3DomeDrive(PS3NavFoot);
+
+     domeRotationSpeed = ps3NavControlSpeed; 
+
+     rotateDome(domeRotationSpeed,"Controller Move");
+    
+  } else
+  {
+     if (!isDomeMotorStopped)
+     {
+         SyR->stop();
+         isDomeMotorStopped = true;
+     }
+  }  
+}  
+
+// =======================================================================================
+//                               Toggle Control Section
+// =======================================================================================
+
+void ps3ToggleSettings(PS3BT* myPS3 = PS3NavFoot)
+{
+
+    // enable / disable drive stick
+    if(myPS3->getButtonPress(PS) && myPS3->getButtonClick(CROSS))
+    {
+
+        #ifdef SHADOW_DEBUG
+          output += "Disabling the DriveStick\r\n";
+          output += "Stopping Motors";
+        #endif
+        
+        ST->stop();
+        isFootMotorStopped = true;
+        isStickEnabled = false;
+        footDriveSpeed = 0;
+    }
+    
+    if(myPS3->getButtonPress(PS) && myPS3->getButtonClick(CIRCLE))
+    {
+        #ifdef SHADOW_DEBUG
+          output += "Enabling the DriveStick\r\n";
+        #endif
+        isStickEnabled = true;
+    }
+    
+    // Enable and Disable Overspeed
+    if (myPS3->getButtonPress(L3) && myPS3->getButtonPress(L1) && isStickEnabled)
+    {
+      
+       if ((millis() - previousSpeedToggleMillis) > 1000)
+       {
+            speedToggleButtonCounter = 0;
+            previousSpeedToggleMillis = millis();
+       } 
+     
+       speedToggleButtonCounter += 1;
+       
+       if (speedToggleButtonCounter == 1)
+       {
+       
+          if (!overSpeedSelected)
+          {
+           
+                overSpeedSelected = true;
+           
+                #ifdef SHADOW_VERBOSE      
+                  output += "Over Speed is now: ON";
+                #endif
+                
+          } else
+          {      
+                overSpeedSelected = false;
+           
+                #ifdef SHADOW_VERBOSE      
+                  output += "Over Speed is now: OFF";
+                #endif   
+          }  
+       }
+    }
+   
+    // Enable Disable Dome Automation
+    if(myPS3->getButtonPress(L2) && myPS3->getButtonClick(CROSS))
+    {
+          domeAutomation = false;
+          domeStatus = 0;
+          domeTargetPosition = 0;
+          SyR->stop();
+          isDomeMotorStopped = true;
+          
+          #ifdef SHADOW_DEBUG
+            output += "Dome Automation OFF\r\n";
+          #endif
+    } 
+
+    if(myPS3->getButtonPress(L2) && myPS3->getButtonClick(CIRCLE))
+    {
+          domeAutomation = true;
+
+          #ifdef SHADOW_DEBUG
+            output += "Dome Automation On\r\n";
+          #endif
+    } 
+
+}
+
+void toggleSettings()
+{
+   if (PS3NavFoot->PS3NavigationConnected) ps3ToggleSettings(PS3NavFoot);
+}  
+
+static inline void sendSerial1(const char* cmd) { Serial1.print(cmd); }
+static inline void sendSerial3(const char* cmd) { Serial3.print(cmd); }
+
+// =======================================================================================
+// This is the main MarcDuino Button Management Function
+// =======================================================================================
+void marcDuinoButtonPush(int type, int MD_func)
+{
+
+// SPECIAL CASE: Voice Toggle Button (Command 99)
+    if (MD_func == 99)
+    {
+        voiceActive = !voiceActive; // Toggle state
+        
+        if (voiceActive)
+        {
+            Serial.println(F("VOICE CONTROL ACTIVE: PS3 Controllers locked for safety."));
+            // Trigger an activation sound. Example: 26 = Volume Up or any beep you prefer
+            // We call the original behavior directly here to bypass the safety lock
+            if (Serial1) Serial1.print(F(":SE26\r")); 
+        }
+        else
+        {
+            Serial.println(F("VOICE CONTROL INACTIVE: PS3 Controllers unlocked."));
+            // Trigger a deactivation sound. Example: 27 = Volume Down
+            if (Serial1) Serial1.print(F(":SE27\r")); 
+        }
+        return; 
+    }
+
+    // SAFETY RULE: If voice control is active, block all other PS3 controller actions
+    if (voiceActive)
+    {
+        Serial.println(F("WARNING: Controller locked. Deactivate Voice Control first."));
+        return; 
+    }
+  
+  if (type == 1)  // Std Marcduino Function Call Configured
+  {
+
+    switch (MD_func)
+    {
+      // 1 = Close All Panels
+      case 1:   
+        sendSerial1(":SE00\r");
+        sendSerial3(":SE00\r");
+        break;
+
+      // 2 = Scream - all panels open
+      case 2:
+        Serial1.print(":SE01\r");        
+        Serial1.print("*HPA0051\r");         
+        sendSerial1("@0P2\r");  
+     
+        break;
+
+      // 3 = Wave, One Panel at a time
+      case 3:        
+        sendSerial1(":SE02\r");
+        sendSerial3(":SE02\r");
+        break;
+
+      // 4 = Fast (smirk) back and forth wave      
+      case 4:
+        Serial1.print(":SE03\r");
+        break;
+                
+      // 5 = Wave 2, Open progressively all panels, then close one by one
+      case 5:
+        Serial1.print(":SE04\r");
+        break;
+                
+      // 6 = Beep cantina - w/ marching ants panel action
+      case 6:
+        Serial1.print(":SE05\r");
+        break;
+                
+      // 7 = Toggle Utility Arms On/Off
+      case 7:
+                
+        if(UtilityArmsOpen == false){
+          sendSerial3(":OP02\r"); //Utility Open Top Utility Arm
+          sendSerial3(":OP03\r"); //Utility Open Bottom Utility Arm
+          delay(750); //Wait until Utility Arms are open       
+          sendSerial3(":ST00\r"); //Stop the buzz
+          UtilityArmsOpen = true;
+        }else{
+          sendSerial3(":CL02\r"); //Utility Close Top Utility Arm
+          sendSerial3(":CL03\r"); //Utility Close Bottom Utility Arm
+          delay(950); //Wait until Utility Arms are closed
+          sendSerial3(":ST00\r"); //Stop the buzz
+          UtilityArmsOpen = false;  
+        }
+        break;
+                
+      // 8 = Cantina Dance - orchestral, rhythmic panel dance
+      case 8:
+        Serial1.print(":SE07\r");
+        break;
+                
+      // 9 = Leia message
+      case 9:        
+        #ifdef SHADOW_VERBOSE
+          output += "MD 9: sending Leia sequence (:SE08) + holo (*HPF001) on Serial1\r\n";
+        #endif
+        sendSerial1(":SE08\r");        
+        sendSerial1("*HPF001\r");
+        sendSerial1("*MV012100\r");
+        break;
+                
+      // 10 = Disco
+      case 10:        
+        sendSerial1("*HPS601\r");
+        break;
+                
+      // 11 = Quite mode reset (panel close, stop holos, stop sounds)
+      case 11:
+        sendSerial1("@0T1\r");
+        sendSerial1(":SE11\r");
+        sendSerial1("*HPT0000\r");         
+        sendSerial1("*HPR0000\r");         
+        sendSerial1("*HPF0000\r");         
+        sendSerial1("*APLE4231000\r");
+        sendSerial1("*APLE5233000\r");
+        break;
+                
+      // 12 = Full Awake mode reset (panel close, rnd sound, holo move,holo lights off)
+      case 12:
+        Serial1.print(":SE11\r");        
+        sendSerial1("*HPF0000\r");
+        sendSerial1("*HPT0000\r");
+        sendSerial1("*HPR0000\r");
+
+        break;
+                
+      // 13 = Mid Awake mode reset (panel close, rnd sound, stop holos)
+      case 13:
+        Serial1.print(":SE13\r");        
+        sendSerial1("*HPF0000\r");       
+        sendSerial1("*HPT0000\r");        
+        sendSerial1("*HPR0000\r");        
+        break;
+                
+      // 14 = Full Awake+ reset (panel close, rnd sound, holo move, holo lights on)
+      case 14:
+
+        Serial1.print(":SE14\r");
+        delay(15);
+        sendSerial1("*HPF001\r");
+        delay(15);
+        sendSerial1("*HPT001\r");
+        delay(15);
+        sendSerial1("*HPR001\r");
+
+        break;
+                
+      // 15 = Scream, with all panels open (NO SOUND)
+      case 15:
+        Serial1.print(":SE51\r");
+        break;
+                
+      // 16 = Wave, one panel at a time (NO SOUND)
+      case 16:
+        Serial1.print(":SE52\r");
+        break;
+                
+      // 17 = Fast (smirk) back and forth (NO SOUND)
+      case 17:
+        Serial1.print(":SE53\r");
+        break;
+                
+      // 18 = Wave 2 (Open progressively, then close one by one) (NO SOUND)
+      case 18:
+        Serial1.print(":SE54\r");
+        break;
+                
+      // 19 = Marching Ants (NO SOUND)
+      case 19:
+        Serial1.print(":SE55\r");
+        break;
+                
+      // 20 = Faint/Short Circuit (NO SOUND)
+      case 20:
+        Serial1.print("$176\r");
+        break;
+                
+      // 21 = Rhythmic cantina dance (NO SOUND)
+      case 21:
+        //Serial1.print(":SE57\r");
+        Serial1.print(":SE57\r");
+        break;
+                
+      // 22 = Random Holo Movement On (All) - No other actions
+      case 22:
+        Serial1.print("*RD00\r");
+        break;
+                
+      // 23 = Toggle Fron Holo lights On/Off 
+      case 23:           
+        //Toggle Fron Holo lights On/Off 
+        if (HoloOn == false){
+          //Turn Front Holo On
+          Serial1.print("*HPF001\r");
+          HoloOn = true;
+        } else {
+          //Turn Front Holo Off
+          Serial1.print("*HPF0000\r");
+          HoloOn = false;
+        }
+        break;
+                
+      // 24 = Toggle Rear Holo lights On/Off 
+      case 24:
+        if (HoloOn2 == false){          
+          //Turn Rear Holo On          
+          Serial1.print("*HPR001\r");
+          HoloOn2 = true;
+        } else {
+          //Turn Rear Holo Off          
+          Serial1.print("*HPR000\r");
+          HoloOn2 = false;
+        }
+        break;
+                
+      // 25 = Holo reset (motion off, lights off)
+      case 25:
+        Serial1.print("*ST00\r");
+        break;
+                
+      // 26 = Volume Up
+      case 26:
+        Serial1.print("$+\r");
+        break;
+                
+      // 27 = Volume Down
+      case 27:
+        Serial1.print("$-\r");
+        break;
+                
+      // 28 = Volume Max
+      case 28:
+        Serial1.print("$f\r");
+        break;
+                
+      // 29 = Volume Mid
+      case 29:
+        Serial1.print("$m\r");
+        break;
+                
+      // 30 = Open All Dome Panels
+      case 30:
+
+        
+        Serial3.print(":OP04\r"); //Left Body Door
+        Serial3.print(":OP07\r"); //Right Body Door
+        Serial1.print("@1T3\r");
+        delay(550); //wait for Main Doors        
+        Serial1.print(":ST00\r"); //Stop the buzz
+        Serial3.print(":ST00\r"); //Stop the buzz       
+        break;
+                
+      // 31 = Open Top Dome Panels
+      case 31:
+        Serial1.print(":OP11\r");
+        break;
+                
+      // 32 = Open Bottom Dome Panels
+      case 32:
+        Serial1.print(":OP12\r");
+        break;
+                
+      // 33 = Close All Dome Panels
+      case 33:
+        Serial1.print(":CL00\r");
+        Serial3.print(":CL00\r");
+        
+        break;
+                
+      // 34 = Open Dome Panel #1
+      case 34:
+        Serial1.print(":OP01\r");
+        break;
+                
+      // 35 = Close Dome Panel #1
+      case 35:
+        Serial1.print(":CL01\r");
+        break;
+                
+      // 36 = Open Dome Panel #2
+      case 36:
+        Serial1.print(":OP02\r");
+        break;
+                
+      // 37 = Close Dome Panel #2
+      case 37:
+        Serial1.print(":CL02\r");
+        break;
+                
+      // 38 = Open Dome Panel #3
+      case 38:
+        Serial1.print(":OP03\r");
+        break;
+                
+      // 39 = Close Dome Panel #3
+      case 39:
+        Serial1.print(":CL03\r");
+        break;
+                
+      // 40 = Open Dome Panel #4
+      case 40:
+        Serial1.print(":OP04\r");
+        break;
+                
+      // 41 = Close Dome Panel #4
+      case 41:
+        Serial1.print(":CL04\r");
+        break;
+                
+      // 42 = Open Dome Panel #5
+      case 42:
+        Serial1.print(":OP05\r");
+        break;
+                
+      // 43 = Close Dome Panel #5
+      case 43:
+        Serial1.print(":CL05\r");
+        break;
+                
+      // 44 = Open Dome Panel #6
+      case 44:
+        Serial1.print(":OP06\r");
+        break;
+                
+      // 45 = Close Dome Panel #6
+      case 45:
+        Serial1.print(":CL06\r");
+        break;
+                
+      // 46 = Open Dome Panel #7
+      case 46:
+        Serial1.print(":OP07\r");
+        break;
+                
+      // 47 = Close Dome Panel #7
+      case 47:
+        Serial1.print(":CL07\r");
+        break;
+                
+      // 48 = Open Dome Panel #8
+      case 48:
+        Serial1.print(":OP08\r");
+        break;
+                
+      // 49 = Close Dome Panel #8
+      case 49:
+        Serial1.print(":CL08\r");
+        break;
+                
+      // 50 = Open Dome Panel #9
+      case 50:
+        Serial1.print(":OP09\r");
+        break;
+                
+      // 51 = Close Dome Panel #9
+      case 51:
+        Serial1.print(":CL09\r");
+        break;
+                
+      // 52 = Open Dome Panel #10
+      case 52:
+        Serial1.print(":OP10\r");
+        break;
+                
+      // 53 = Close Dome Panel #10
+      case 53:
+        Serial1.print(":CL10\r");
+        break;
+
+      // 54 = Open All Body Panels
+      case 54:
+        Serial3.print(":OP00\r");
+        break;
+
+      // 55 = Close All Body Panels         
+      case 55:
+        Serial3.print(":CL00\r");
+        break;
+                
+      // 56 = Open Body Panel #1
+      case 56:
+        //Toggle Body Panel Data Panel Door
+        if (DPLOpen == false){
+          Serial3.print(":OP01\r"); //Open the panel 
+          delay(550); //give panel time to open
+          Serial3.print(":ST01\r"); //Stop the buzz
+          DPLOpen = true;
+        } else {
+          //Close Body Panel 1
+          Serial3.print(":CL01\r");
+          DPLOpen = false;
+        }
+        break;
+                
+      // 57 = Close Body Panel #1
+      case 57:
+        //Close Body Panel 1
+        Serial3.print(":CL01\r");
+        break;
+                
+      // 58 = Open Body Panel #2
+      case 58:
+      //Top Utility Arm Toggle
+        if (TopUArmOpen == false){
+          Serial3.print(":OP02\r"); //Open the panel 
+          delay(750); //give panel time to open
+          Serial3.print(":ST02\r"); //Stop the buzz
+          TopUArmOpen = true;
+        } else {
+          //Close Utility Arm Panel 2
+          Serial3.print(":CL02\r");
+          TopUArmOpen = false;
+        }
+        break;
+                
+      // 59 = Close Body Panel #2
+      case 59:
+        Serial3.print(":CL02\r");
+        break;
+                
+      // 60 = Open Body Panel #3
+      case 60:
+        //Bottom Utility Arm Toggle
+        if (BotUArmOpen == false){
+          Serial3.print(":OP03\r"); //Open the panel 
+          delay(750); //give panel time to open
+          Serial3.print(":ST03\r"); //Stop the buzz
+          BotUArmOpen = true;
+        } else {
+          //Close Utility Arm Panel 2
+          Serial3.print(":CL03\r");
+          BotUArmOpen = false;
+        }
+        break;
+                
+      // 61 = Close Body Panel #3
+      case 61:
+        Serial3.print(":CL03\r");
+        break;
+                
+      // 62 = Open Body Panel #4
+      case 62:
+        //Toggle Left Body Door Panel 4
+        if (LeftDoorOpen == false){
+          Serial3.print(":OP04\r"); //Open the panel 4
+          delay(400); //give panel time to open
+          Serial3.print(":ST04\r"); //Stop the buzz
+          
+          LeftDoorOpen = true;
+        } else {
+          
+         //Close Left Door Panel 4
+          Serial3.print(":CL04\r");
+          LeftDoorOpen = false;
+        }
+        break;
+                
+      // 63 = Close Body Panel #4
+      case 63:
+        Serial3.print(":CL04\r");
+        break;
+                
+      // 64 = Open Body Panel #5
+      case 64:
+        Serial3.print(":OP05\r");
+        break;
+                
+      // 65 = Close Body Panel #5
+      case 65:
+        Serial3.print(":CL05\r");
+        break;
+                
+      // 66 = Open Body Panel #6
+      case 66:
+        Serial3.print(":OP06\r");
+        break;
+                
+      // 67 = Close Body Panel #6
+      case 67:
+        Serial3.print(":CL06\r");
+        break;
+                
+      // 68 = Open Body Panel #7
+      case 68:
+        //Toggle Right Body Door Panel 7
+        if (RightDoorOpen == false){
+          Serial3.print(":OP07\r"); //Open the panel 7
+          delay(400); //give panel time to open
+          Serial3.print(":ST07\r"); //Stop the buzz
+          RightDoorOpen = true;
+        } else {
+          //Close Right Door Panel 7
+          Serial3.print(":CL07\r");
+          RightDoorOpen = false;
+        }
+        break;
+                
+      // 69 = Close Body Panel #7
+      case 69:
+        Serial3.print(":CL07\r");
+        break;
+                
+      // 70 = Open Body Panel #8
+      case 70:
+        Serial3.print(":OP08\r");
+        break;
+                
+      // 71 = Close Body Panel #8
+      case 71:
+        Serial3.print(":CL08\r");
+        break;
+                
+      // 72 = Open Body Panel #9
+      case 72:
+        Serial3.print(":OP09\r");
+        break;
+                
+      // 73 = Close Body Panel #9
+      case 73:
+        Serial3.print(":CL09\r");
+        break;
+                
+      // 74 = Open Body Panel #10
+      case 74:
+        Serial3.print(":OP10\r");
+        break;
+
+      // 75 = Close Body Panel #10
+      case 75:
+        Serial3.print(":CL10\r");
+        break;
+
+      // 76 = Magic Panel ON
+      case 76:
+        Serial3.print("*MO99\r");
+        break;
+
+      // 77 = Magic Panel OFF
+      case 77:
+        Serial3.print("*MO00\r");
+        break;
+
+      // 78 = Magic Panel Flicker (10 seconds)
+      case 78:
+        Serial3.print("*MF10\r");
+        break;
+        //Eebel code start
+      // 79 = Eebel Sppok Wave Dome and body
+      case 79:
+        Serial3.print(":SE32\r");     
+        
+         break;
+      // 80 = Eebel Wave Bye and WaveByeSound
+      case 80:
+        //WaveBye
+        Serial1.print(":SE17\r");
+        break;
+      // 81 = Eebel Utility Arms Open and then Close
+      case 81:
+        //Utility Arm Open and Close
+        Serial3.print(":SE30\r");
+        break;
+      // 82 = Eebel Open all Body Doors, raise arms, operate tools, lower arms close all doors
+      case 82:
+        //Test all body panels/tools
+        Serial3.print(":SE31\r");
+        break;
+      // 83 = Eebel Use Gripper
+      case 83:
+        //Use Gripper Arm
+        Serial3.print(":SE33\r");
+        break;
+      // 84 = Eebel Use INterface Tool
+      case 84:
+        //Use Interface Tool
+        Serial3.print(":SE34\r");
+        break;
+      // 85 = Eebel Ping Pong Body Doors
+      case 85:
+        //Use Ping Pong Big Body Doors 
+        Serial3.print(":SE35\r");
+        break;    
+      // 86 = Eebel Star Wars Disco Dance
+      case 86:
+        //Star Wars Disco
+        //Serial1.print(":SE18\r");
+        Serial1.print("@0T3\r");
+         delay(5000);
+         //@0T1 - All Logics set to Normal
+         Serial1.print("@0T1\r");
+        break;
+      // 87 = Eebel Star Trek Disco Dance (Wrong franchise! I know, right?)
+      case 87:
+        //Star Trek Disco
+        //Serial1.print(":SE19\r");
+        //Astropixels plus @0T3 - All Logics set to Alarm (01)
+        Serial1.print("@0T3\r");
+         delay(5000);
+         //@0T1 - All Logics set to Normal
+         Serial1.print("@0T1\r");
+        break;  
+      // 88 = Eebel Play Next Song
+      case 88:
+        //Play Next Song
+        CurrentSongNum = CurrentSongNum + 1; //First of 5 Custom Song MP3 Files default is 0 at startup
+        if (CurrentSongNum > CustomSongMax){   
+            CurrentSongNum = 0;
+            Serial1.print(MakeSongCommand(1));//Reset to beginning Song and play it
+        }  else {
+            Serial1.print(MakeSongCommand(CurrentSongNum));//Play Newly selected song
+        }
+        break;
+      // 89 = Eebel Play Previous Song
+      case 89:
+        //Play Previous Song
+        CurrentSongNum = CurrentSongNum - 1; //Previous of 5 Custom Song MP3 Files default is 0 at startup
+        
+        if (CurrentSongNum < 1){   
+            CurrentSongNum = CustomSongMax;
+        }
+            Serial1.print(MakeSongCommand(CurrentSongNum));//Reset to beginning Song and play it
+//        }  else {
+//            Serial1.print(MakeSongCommand(CurrentSongNum));//Play Newly selected song
+//        }
+        break;
+
+        // 90 Arrow Up + L3 (Dome arrow + Foot L3, cross-controller)
+        case 90:
+          Serial1.print("$R\r");
+        break;
+    }
+      //Eebel code end
+  }  // End Std Marcduino Function Calls
+   
+}
+
+static boolean footArrowPressed() {
+  return PS3NavFoot->PS3NavigationConnected &&
+         (PS3NavFoot->getButtonPress(UP) || PS3NavFoot->getButtonPress(DOWN) || PS3NavFoot->getButtonPress(LEFT) || PS3NavFoot->getButtonPress(RIGHT));
+}
+
+static boolean domeArrowPressed() {
+  return PS3NavDome->PS3NavigationConnected &&
+         (PS3NavDome->getButtonPress(UP) || PS3NavDome->getButtonPress(DOWN) || PS3NavDome->getButtonPress(LEFT) || PS3NavDome->getButtonPress(RIGHT));
+}
+
+static boolean domeHasModifierButtons() {
+  return PS3NavDome->PS3NavigationConnected &&
+         (PS3NavDome->getButtonPress(CROSS) || PS3NavDome->getButtonPress(CIRCLE) || PS3NavDome->getButtonPress(PS));
+}
+
+static boolean footBaseNoModifiers() {
+  return !PS3NavFoot->getButtonPress(CROSS) &&
+         !PS3NavFoot->getButtonPress(CIRCLE) &&
+         !PS3NavFoot->getButtonPress(L1) &&
+         !PS3NavFoot->getButtonPress(PS);
+}
+
+static boolean counterOk() { return marcDuinoButtonCounter == 1; }
+
+// FOOT base (blocked if dome has CROSS/CIRCLE/PS held)
+static boolean checkFootUpBase()    { return counterOk() && footBaseNoModifiers() && PS3NavFoot->getButtonPress(UP)    && !domeHasModifierButtons(); }
+static boolean checkFootDownBase()  { return counterOk() && footBaseNoModifiers() && PS3NavFoot->getButtonPress(DOWN)  && !domeHasModifierButtons(); }
+static boolean checkFootLeftBase()  { return counterOk() && footBaseNoModifiers() && PS3NavFoot->getButtonPress(LEFT)  && !domeHasModifierButtons(); }
+static boolean checkFootRightBase() { return counterOk() && footBaseNoModifiers() && PS3NavFoot->getButtonPress(RIGHT) && !domeHasModifierButtons(); }
+
+// FOOT + CROSS (CROSS comes from Foot if Dome not connected, else from Dome)
+static boolean checkFootUpCross()    { return counterOk() && ((!PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(UP)    && PS3NavFoot->getButtonPress(CROSS)) || (PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(UP)    && PS3NavDome->getButtonPress(CROSS))); }
+static boolean checkFootDownCross()  { return counterOk() && ((!PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(DOWN)  && PS3NavFoot->getButtonPress(CROSS)) || (PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(DOWN)  && PS3NavDome->getButtonPress(CROSS))); }
+static boolean checkFootLeftCross()  { return counterOk() && ((!PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(LEFT)  && PS3NavFoot->getButtonPress(CROSS)) || (PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(LEFT)  && PS3NavDome->getButtonPress(CROSS))); }
+static boolean checkFootRightCross() { return counterOk() && ((!PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(RIGHT) && PS3NavFoot->getButtonPress(CROSS)) || (PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(RIGHT) && PS3NavDome->getButtonPress(CROSS))); }
+
+// FOOT + CIRCLE (CIRCLE comes from Foot if Dome not connected, else from Dome)
+static boolean checkFootUpCircle()    { return counterOk() && ((!PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(UP)    && PS3NavFoot->getButtonPress(CIRCLE)) || (PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(UP)    && PS3NavDome->getButtonPress(CIRCLE))); }
+static boolean checkFootDownCircle()  { return counterOk() && ((!PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(DOWN)  && PS3NavFoot->getButtonPress(CIRCLE)) || (PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(DOWN)  && PS3NavDome->getButtonPress(CIRCLE))); }
+static boolean checkFootLeftCircle()  { return counterOk() && ((!PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(LEFT)  && PS3NavFoot->getButtonPress(CIRCLE)) || (PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(LEFT)  && PS3NavDome->getButtonPress(CIRCLE))); }
+static boolean checkFootRightCircle() { return counterOk() && ((!PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(RIGHT) && PS3NavFoot->getButtonPress(CIRCLE)) || (PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(RIGHT) && PS3NavDome->getButtonPress(CIRCLE))); }
+
+// FOOT + L1 (always from Foot)
+static boolean checkFootUpL1()    { return counterOk() && PS3NavFoot->getButtonPress(UP)    && PS3NavFoot->getButtonPress(L1); }
+static boolean checkFootDownL1()  { return counterOk() && PS3NavFoot->getButtonPress(DOWN)  && PS3NavFoot->getButtonPress(L1); }
+static boolean checkFootLeftL1()  { return counterOk() && PS3NavFoot->getButtonPress(LEFT)  && PS3NavFoot->getButtonPress(L1); }
+static boolean checkFootRightL1() { return counterOk() && PS3NavFoot->getButtonPress(RIGHT) && PS3NavFoot->getButtonPress(L1); }
+
+// FOOT + PS (PS comes from Foot if Dome not connected, else from Dome)
+static boolean checkFootUpPS()    { return counterOk() && ((!PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(UP)    && PS3NavFoot->getButtonPress(PS)) || (PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(UP)    && PS3NavDome->getButtonPress(PS))); }
+static boolean checkFootDownPS()  { return counterOk() && ((!PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(DOWN)  && PS3NavFoot->getButtonPress(PS)) || (PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(DOWN)  && PS3NavDome->getButtonPress(PS))); }
+static boolean checkFootLeftPS()  { return counterOk() && ((!PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(LEFT)  && PS3NavFoot->getButtonPress(PS)) || (PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(LEFT)  && PS3NavDome->getButtonPress(PS))); }
+static boolean checkFootRightPS() { return counterOk() && ((!PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(RIGHT) && PS3NavFoot->getButtonPress(PS)) || (PS3NavDome->PS3NavigationConnected && PS3NavFoot->getButtonPress(RIGHT) && PS3NavDome->getButtonPress(PS))); }
+
+// FOOT arrow + DOME L3 (cross-controller: L3 on other hand so no same-controller L3+arrow)
+static boolean checkFootUpL3()    { return counterOk() && PS3NavFoot->getButtonPress(UP)    && PS3NavDome->PS3NavigationConnected && PS3NavDome->getButtonPress(L3); }
+static boolean checkFootDownL3()  { return counterOk() && PS3NavFoot->getButtonPress(DOWN)  && PS3NavDome->PS3NavigationConnected && PS3NavDome->getButtonPress(L3); }
+static boolean checkFootLeftL3()  { return counterOk() && PS3NavFoot->getButtonPress(LEFT)  && PS3NavDome->PS3NavigationConnected && PS3NavDome->getButtonPress(L3); }
+static boolean checkFootRightL3() { return counterOk() && PS3NavFoot->getButtonPress(RIGHT) && PS3NavDome->PS3NavigationConnected && PS3NavDome->getButtonPress(L3); }
+
+static void processMarcDuinoActions(const MarcDuinoAction* actions, uint8_t actionCount)
+{
+  for (uint8_t i = 0; i < actionCount; i++)
+  {
+    if (actions[i].check && actions[i].check())
+    {
+      if (actions[i].mdFunc == 0) {
+        #ifdef SHADOW_VERBOSE
+          if (actions[i].verbose) { output += actions[i].verbose; output += F(" FREE\r\n"); }
+        #endif
+      } else {
+        marcDuinoButtonPush(1, actions[i].mdFunc);
+        #ifdef SHADOW_VERBOSE
+          if (actions[i].verbose) output += actions[i].verbose;
+        #endif
+      }
+      return;
+    }
+  }
+}
+
+// DOME base (requires no CROSS/CIRCLE/L1/PS on dome AND no CROSS/CIRCLE/PS on foot)
+static boolean checkDomeUpBase() {
+  return counterOk() &&
+         PS3NavDome->getButtonPress(UP) &&
+         !PS3NavDome->getButtonPress(L2) &&
+         !PS3NavDome->getButtonPress(CROSS) && !PS3NavDome->getButtonPress(CIRCLE) && !PS3NavDome->getButtonPress(L1) && !PS3NavDome->getButtonPress(PS) &&
+         !PS3NavFoot->getButtonPress(CROSS) && !PS3NavFoot->getButtonPress(CIRCLE) && !PS3NavFoot->getButtonPress(PS);
+}
+static boolean checkDomeDownBase() {
+  return counterOk() &&
+         PS3NavDome->getButtonPress(DOWN) &&
+         !PS3NavDome->getButtonPress(L2) &&
+         !PS3NavDome->getButtonPress(CROSS) && !PS3NavDome->getButtonPress(CIRCLE) && !PS3NavDome->getButtonPress(L1) && !PS3NavDome->getButtonPress(PS) &&
+         !PS3NavFoot->getButtonPress(CROSS) && !PS3NavFoot->getButtonPress(CIRCLE) && !PS3NavFoot->getButtonPress(PS);
+}
+static boolean checkDomeLeftBase() {
+  return counterOk() &&
+         PS3NavDome->getButtonPress(LEFT) &&
+         !PS3NavDome->getButtonPress(L2) &&
+         !PS3NavDome->getButtonPress(CROSS) && !PS3NavDome->getButtonPress(CIRCLE) && !PS3NavDome->getButtonPress(L1) && !PS3NavDome->getButtonPress(PS) &&
+         !PS3NavFoot->getButtonPress(CROSS) && !PS3NavFoot->getButtonPress(CIRCLE) && !PS3NavFoot->getButtonPress(PS);
+}
+static boolean checkDomeRightBase() {
+  return counterOk() &&
+         PS3NavDome->getButtonPress(RIGHT) &&
+         !PS3NavDome->getButtonPress(L2) &&
+         !PS3NavDome->getButtonPress(CROSS) && !PS3NavDome->getButtonPress(CIRCLE) && !PS3NavDome->getButtonPress(L1) && !PS3NavDome->getButtonPress(PS) &&
+         !PS3NavFoot->getButtonPress(CROSS) && !PS3NavFoot->getButtonPress(CIRCLE) && !PS3NavFoot->getButtonPress(PS);
+}
+
+// DOME + Foot modifiers (CROSS/CIRCLE/PS on Foot)
+static boolean checkDomeUpCross() { return counterOk() && PS3NavDome->getButtonPress(UP) && PS3NavFoot->getButtonPress(CROSS); }
+static boolean checkDomeDownCross() { return counterOk() && PS3NavDome->getButtonPress(DOWN) && PS3NavFoot->getButtonPress(CROSS); }
+static boolean checkDomeLeftCross() { return counterOk() && PS3NavDome->getButtonPress(LEFT) && PS3NavFoot->getButtonPress(CROSS); }
+static boolean checkDomeRightCross() { return counterOk() && PS3NavDome->getButtonPress(RIGHT) && PS3NavFoot->getButtonPress(CROSS); }
+
+static boolean checkDomeUpCircle() { return counterOk() && PS3NavDome->getButtonPress(UP) && PS3NavFoot->getButtonPress(CIRCLE); }
+static boolean checkDomeDownCircle() { return counterOk() && PS3NavDome->getButtonPress(DOWN) && PS3NavFoot->getButtonPress(CIRCLE); }
+static boolean checkDomeLeftCircle() { return counterOk() && PS3NavDome->getButtonPress(LEFT) && PS3NavFoot->getButtonPress(CIRCLE); }
+static boolean checkDomeRightCircle() { return counterOk() && PS3NavDome->getButtonPress(RIGHT) && PS3NavFoot->getButtonPress(CIRCLE); }
+
+// DOME + L2 (cross-controller: CROSS/CIRCLE come from Foot)
+static boolean checkDomeUpL2() {
+  return counterOk() &&
+         PS3NavDome->getButtonPress(UP) && PS3NavDome->getButtonPress(L2) &&
+         !PS3NavDome->getButtonPress(CROSS) && !PS3NavDome->getButtonPress(CIRCLE) && !PS3NavDome->getButtonPress(L1) && !PS3NavDome->getButtonPress(PS) &&
+         !PS3NavFoot->getButtonPress(CROSS) && !PS3NavFoot->getButtonPress(CIRCLE) && !PS3NavFoot->getButtonPress(PS);
+}
+static boolean checkDomeDownL2() {
+  return counterOk() &&
+         PS3NavDome->getButtonPress(DOWN) && PS3NavDome->getButtonPress(L2) &&
+         !PS3NavDome->getButtonPress(CROSS) && !PS3NavDome->getButtonPress(CIRCLE) && !PS3NavDome->getButtonPress(L1) && !PS3NavDome->getButtonPress(PS) &&
+         !PS3NavFoot->getButtonPress(CROSS) && !PS3NavFoot->getButtonPress(CIRCLE) && !PS3NavFoot->getButtonPress(PS);
+}
+static boolean checkDomeLeftL2() {
+  return counterOk() &&
+         PS3NavDome->getButtonPress(LEFT) && PS3NavDome->getButtonPress(L2) &&
+         !PS3NavDome->getButtonPress(CROSS) && !PS3NavDome->getButtonPress(CIRCLE) && !PS3NavDome->getButtonPress(L1) && !PS3NavDome->getButtonPress(PS) &&
+         !PS3NavFoot->getButtonPress(CROSS) && !PS3NavFoot->getButtonPress(CIRCLE) && !PS3NavFoot->getButtonPress(PS);
+}
+static boolean checkDomeRightL2() {
+  return counterOk() &&
+         PS3NavDome->getButtonPress(RIGHT) && PS3NavDome->getButtonPress(L2) &&
+         !PS3NavDome->getButtonPress(CROSS) && !PS3NavDome->getButtonPress(CIRCLE) && !PS3NavDome->getButtonPress(L1) && !PS3NavDome->getButtonPress(PS) &&
+         !PS3NavFoot->getButtonPress(CROSS) && !PS3NavFoot->getButtonPress(CIRCLE) && !PS3NavFoot->getButtonPress(PS);
+}
+
+static boolean checkDomeUpL2Cross() { return counterOk() && PS3NavDome->getButtonPress(UP)    && PS3NavDome->getButtonPress(L2) && PS3NavFoot->getButtonPress(CROSS); }
+static boolean checkDomeDownL2Cross() { return counterOk() && PS3NavDome->getButtonPress(DOWN)  && PS3NavDome->getButtonPress(L2) && PS3NavFoot->getButtonPress(CROSS); }
+static boolean checkDomeLeftL2Cross() { return counterOk() && PS3NavDome->getButtonPress(LEFT)  && PS3NavDome->getButtonPress(L2) && PS3NavFoot->getButtonPress(CROSS); }
+static boolean checkDomeRightL2Cross() { return counterOk() && PS3NavDome->getButtonPress(RIGHT) && PS3NavDome->getButtonPress(L2) && PS3NavFoot->getButtonPress(CROSS); }
+
+static boolean checkDomeUpL2Circle() { return counterOk() && PS3NavDome->getButtonPress(UP)    && PS3NavDome->getButtonPress(L2) && PS3NavFoot->getButtonPress(CIRCLE); }
+static boolean checkDomeDownL2Circle() { return counterOk() && PS3NavDome->getButtonPress(DOWN)  && PS3NavDome->getButtonPress(L2) && PS3NavFoot->getButtonPress(CIRCLE); }
+static boolean checkDomeLeftL2Circle() { return counterOk() && PS3NavDome->getButtonPress(LEFT)  && PS3NavDome->getButtonPress(L2) && PS3NavFoot->getButtonPress(CIRCLE); }
+static boolean checkDomeRightL2Circle() { return counterOk() && PS3NavDome->getButtonPress(RIGHT) && PS3NavDome->getButtonPress(L2) && PS3NavFoot->getButtonPress(CIRCLE); }
+
+// DOME + L1 (on dome)
+static boolean checkDomeUpL1() { return counterOk() && PS3NavDome->getButtonPress(UP) && PS3NavDome->getButtonPress(L1); }
+static boolean checkDomeDownL1() { return counterOk() && PS3NavDome->getButtonPress(DOWN) && PS3NavDome->getButtonPress(L1); }
+static boolean checkDomeLeftL1() { return counterOk() && PS3NavDome->getButtonPress(LEFT) && PS3NavDome->getButtonPress(L1); }
+static boolean checkDomeRightL1() { return counterOk() && PS3NavDome->getButtonPress(RIGHT) && PS3NavDome->getButtonPress(L1); }
+
+static boolean checkDomeUpPS() { return counterOk() && PS3NavDome->getButtonPress(UP) && PS3NavFoot->getButtonPress(PS); }
+static boolean checkDomeDownPS() { return counterOk() && PS3NavDome->getButtonPress(DOWN) && PS3NavFoot->getButtonPress(PS); }
+static boolean checkDomeLeftPS() { return counterOk() && PS3NavDome->getButtonPress(LEFT) && PS3NavFoot->getButtonPress(PS); }
+static boolean checkDomeRightPS() { return counterOk() && PS3NavDome->getButtonPress(RIGHT) && PS3NavFoot->getButtonPress(PS); }
+
+// DOME arrow + FOOT L3 (cross-controller: L3 on other hand)
+static boolean checkDomeUpL3()    { return counterOk() && PS3NavDome->getButtonPress(UP)    && PS3NavFoot->getButtonPress(L3); }
+static boolean checkDomeDownL3()  { return counterOk() && PS3NavDome->getButtonPress(DOWN)  && PS3NavFoot->getButtonPress(L3); }
+static boolean checkDomeLeftL3()  { return counterOk() && PS3NavDome->getButtonPress(LEFT)  && PS3NavFoot->getButtonPress(L3); }
+static boolean checkDomeRightL3() { return counterOk() && PS3NavDome->getButtonPress(RIGHT) && PS3NavFoot->getButtonPress(L3); }
+
+void marcDuinoFoot()
+{
+   if (PS3NavFoot->PS3NavigationConnected && (PS3NavFoot->getButtonPress(UP) || PS3NavFoot->getButtonPress(DOWN) || PS3NavFoot->getButtonPress(LEFT) || PS3NavFoot->getButtonPress(RIGHT)))
+   {
+      
+       if ((millis() - previousMarcDuinoMillis) > 1000)
+       {
+            marcDuinoButtonCounter = 0;
+            previousMarcDuinoMillis = millis();
+       } 
+     
+       marcDuinoButtonCounter += 1;
+         
+   } else
+   {
+       return;    
+   }
+   
+   // Clear inbound buffer of any data sent form the MarcDuino board
+   while (Serial1.available()) Serial1.read();
+
+  const MarcDuinoAction actions[] = {
+    // Cross-controller: Foot arrow + Dome L3 (checked first so base does not match)
+    { checkFootUpL3,    footBtnUpL3_MD_func,    F("FOOT: btnUP_L3") },
+    { checkFootDownL3,  footBtnDownL3_MD_func,  F("FOOT: btnDown_L3") },
+    { checkFootLeftL3,  footBtnLeftL3_MD_func,  F("FOOT: btnLeft_L3") },
+    { checkFootRightL3, footBtnRightL3_MD_func, F("FOOT: btnRight_L3") },
+
+    { checkFootUpBase,    footBtnUp_MD_func,        F("FOOT: btnUP") },
+    { checkFootDownBase,  footBtnDown_MD_func,      F("FOOT: btnDown") },
+    { checkFootLeftBase,  footBtnLeft_MD_func,      F("FOOT: btnLeft") },
+    { checkFootRightBase, footBtnRight_MD_func,     F("FOOT: btnRight") },
+
+    { checkFootUpCross,   footBtnUpCross_MD_func,   F("FOOT: btnUP_CROSS") },
+    { checkFootDownCross, footBtnDownCross_MD_func, F("FOOT: btnDown_CROSS") },
+    { checkFootLeftCross, footBtnLeftCross_MD_func, F("FOOT: btnLeft_CROSS") },
+    { checkFootRightCross,footBtnRightCross_MD_func,F("FOOT: btnRight_CROSS") },
+
+    { checkFootUpCircle,   footBtnUpCircle_MD_func,   F("FOOT: btnUP_CIRCLE") },
+    { checkFootDownCircle, footBtnDownCircle_MD_func, F("FOOT: btnDown_CIRCLE") },
+    { checkFootLeftCircle, footBtnLeftCircle_MD_func, F("FOOT: btnLeft_CIRCLE") },
+    { checkFootRightCircle,footBtnRightCircle_MD_func,F("FOOT: btnRight_CIRCLE") },
+
+    { checkFootUpL1,    footBtnUpL1_MD_func,    F("FOOT: btnUP_L1") },
+    { checkFootDownL1,  footBtnDownL1_MD_func,  F("FOOT: btnDown_L1") },
+    { checkFootLeftL1,  footBtnLeftL1_MD_func,  F("FOOT: btnLeft_L1") },
+    { checkFootRightL1, footBtnRightL1_MD_func, F("FOOT: btnRight_L1") },
+
+    { checkFootUpPS,    footBtnUpPS_MD_func,    F("FOOT: btnUP_PS") },
+    { checkFootDownPS,  footBtnDownPS_MD_func,  F("FOOT: btnDown_PS") },
+    { checkFootLeftPS,  footBtnLeftPS_MD_func,  F("FOOT: btnLeft_PS") },
+    { checkFootRightPS, footBtnRightPS_MD_func, F("FOOT: btnRight_PS") },
+  };
+
+   processMarcDuinoActions(actions, sizeof(actions) / sizeof(actions[0]));
+}
+
+// ===================================================================================================================
+// This function determines if MarcDuino buttons were selected and calls main processing function for DOME Controller
+// ===================================================================================================================
+void marcDuinoDome()
+{
+   if (PS3NavDome->PS3NavigationConnected && (PS3NavDome->getButtonPress(UP) || PS3NavDome->getButtonPress(DOWN) || PS3NavDome->getButtonPress(LEFT) || PS3NavDome->getButtonPress(RIGHT)))
+   {
+      
+       if ((millis() - previousMarcDuinoMillis) > 1000)
+       {
+            marcDuinoButtonCounter = 0;
+            previousMarcDuinoMillis = millis();
+       } 
+     
+       marcDuinoButtonCounter += 1;
+         
+   } else
+   {
+       return;    
+   }
+   
+   // Clear inbound buffer of any data sent form the MarcDuino board
+   while (Serial1.available()) Serial1.read();
+
+  const MarcDuinoAction actions[] = {
+    // Cross-controller: Dome arrow + Foot L3 (checked first)
+    { checkDomeUpL3, domeBtnUpL3_MD_func, F("DOME: btnUP_L3") },
+    { checkDomeDownL3, domeBtnDownL3_MD_func, F("DOME: btnDown_L3") },
+    { checkDomeLeftL3, domeBtnLeftL3_MD_func, F("DOME: btnLeft_L3") },
+    { checkDomeRightL3, domeBtnRightL3_MD_func, F("DOME: btnRight_L3") },
+
+    // L2 on Dome:
+    // - L2 + arrow + Foot CROSS/CIRCLE have their own (default FREE) slots
+    // - L2 + arrow alone is also its own (default FREE) slot
+    { checkDomeUpL2Cross, domeBtnUpL2Cross_MD_func, F("DOME: btnUP_L2_CROSS") },
+    { checkDomeDownL2Cross, domeBtnDownL2Cross_MD_func, F("DOME: btnDown_L2_CROSS") },
+    { checkDomeLeftL2Cross, domeBtnLeftL2Cross_MD_func, F("DOME: btnLeft_L2_CROSS") },
+    { checkDomeRightL2Cross, domeBtnRightL2Cross_MD_func, F("DOME: btnRight_L2_CROSS") },
+
+    { checkDomeUpL2Circle, domeBtnUpL2Circle_MD_func, F("DOME: btnUP_L2_CIRCLE") },
+    { checkDomeDownL2Circle, domeBtnDownL2Circle_MD_func, F("DOME: btnDown_L2_CIRCLE") },
+    { checkDomeLeftL2Circle, domeBtnLeftL2Circle_MD_func, F("DOME: btnLeft_L2_CIRCLE") },
+    { checkDomeRightL2Circle, domeBtnRightL2Circle_MD_func, F("DOME: btnRight_L2_CIRCLE") },
+
+    { checkDomeUpL2, domeBtnUpL2_MD_func, F("DOME: btnUP_L2") },
+    { checkDomeDownL2, domeBtnDownL2_MD_func, F("DOME: btnDown_L2") },
+    { checkDomeLeftL2, domeBtnLeftL2_MD_func, F("DOME: btnLeft_L2") },
+    { checkDomeRightL2, domeBtnRightL2_MD_func, F("DOME: btnRight_L2") },
+
+    { checkDomeUpBase, domeBtnUp_MD_func, F("DOME: btnUP") },
+    { checkDomeDownBase, domeBtnDown_MD_func, F("DOME: btnDown") },
+    { checkDomeLeftBase, domeBtnLeft_MD_func, F("DOME: btnLeft") },
+    { checkDomeRightBase, domeBtnRight_MD_func, F("DOME: btnRight") },
+
+    { checkDomeUpCross, domeBtnUpCross_MD_func, F("DOME: btnUP_CROSS") },
+    { checkDomeDownCross, domeBtnDownCross_MD_func, F("DOME: btnDown_CROSS") },
+    { checkDomeLeftCross, domeBtnLeftCross_MD_func, F("DOME: btnLeft_CROSS") },
+    { checkDomeRightCross, domeBtnRightCross_MD_func, F("DOME: btnRight_CROSS") },
+
+    { checkDomeUpCircle, domeBtnUpCircle_MD_func, F("DOME: btnUP_CIRCLE") },
+    { checkDomeDownCircle, domeBtnDownCircle_MD_func, F("DOME: btnDown_CIRCLE") },
+    { checkDomeLeftCircle, domeBtnLeftCircle_MD_func, F("DOME: btnLeft_CIRCLE") },
+    { checkDomeRightCircle, domeBtnRightCircle_MD_func, F("DOME: btnRight_CIRCLE") },
+
+    { checkDomeUpL1, domeBtnUpL1_MD_func, F("DOME: btnUP_L1") },
+    { checkDomeDownL1, domeBtnDownL1_MD_func, F("DOME: btnDown_L1") },
+    { checkDomeLeftL1, domeBtnLeftL1_MD_func, F("DOME: btnLeft_L1") },
+    { checkDomeRightL1, domeBtnRightL1_MD_func, F("DOME: btnRight_L1") },
+
+    { checkDomeUpPS, domeBtnUpPS_MD_func, F("DOME: btnUP_PS") },
+    { checkDomeDownPS, domeBtnDownPS_MD_func, F("DOME: btnDown_PS") },
+    { checkDomeLeftPS, domeBtnLeftPS_MD_func, F("DOME: btnLeft_PS") },
+    { checkDomeRightPS, domeBtnRightPS_MD_func, F("DOME: btnRight_PS") },
+  };
+
+   processMarcDuinoActions(actions, sizeof(actions) / sizeof(actions[0]));
+   return;
+
+}
+
+
+// =======================================================================================
+//                             Dome Automation Function
+//
+//    Features toggles 'on' via L2 + CIRCLE.  'off' via L2 + CROSS.  Default is 'off'.
+//
+//    This routines randomly turns the dome motor in both directions.  It assumes the 
+//    dome is in the 'home' position when the auto dome feature is toggled on.  From
+//    there it turns the dome in a random direction.  Stops for a random length of 
+//    of time.  Then returns the dome to the home position.  This randomly repeats.
+//
+//    It is driven off the user variable - time360DomeTurn.  This records how long
+//    it takes the dome to do a 360 degree turn at the given auto dome speed.  Tweaking
+//    this parameter to be close provides the best results.
+//
+//    Activating the dome controller manually immediately cancels the auto dome feature
+//    or you can toggle the feature off by pressing L2 + CROSS.
+// =======================================================================================
+void autoDome()
+{
+    long rndNum;
+    int domeSpeed;
+    
+    if (domeStatus == 0)  // Dome is currently stopped - prepare for a future turn
+    {
+      
+        if (domeTargetPosition == 0)  // Dome is currently in the home position - prepare to turn away
+        {
+          
+            domeStartTurnTime = millis() + (random(3, 10) * 1000);
+            
+            rndNum = random(5,354);
+            
+            domeTargetPosition = rndNum;  // set the target position to a random degree of a 360 circle - shaving off the first and last 5 degrees
+            
+            if (domeTargetPosition < 180)  // Turn the dome in the positive direction
+            {
+              
+                domeTurnDirection = 1;
+                
+                domeStopTurnTime = domeStartTurnTime + ((domeTargetPosition / 360) * time360DomeTurn);
+              
+            } else  // Turn the dome in the negative direction
+            {
+                    
+                domeTurnDirection = -1;
+                
+                domeStopTurnTime = domeStartTurnTime + (((360 - domeTargetPosition) / 360) * time360DomeTurn);
+              
+            }
+          
+        } else  // Dome is not in the home position - send it back to home
+        {
+          
+            domeStartTurnTime = millis() + (random(3, 10) * 1000);
+            
+            if (domeTargetPosition < 180)
+            {
+              
+                domeTurnDirection = -1;
+                
+                domeStopTurnTime = domeStartTurnTime + ((domeTargetPosition / 360) * time360DomeTurn);
+              
+            } else
+            {
+                    
+                domeTurnDirection = 1;
+                
+                domeStopTurnTime = domeStartTurnTime + (((360 - domeTargetPosition) / 360) * time360DomeTurn);
+              
+            }
+            
+            domeTargetPosition = 0;
+          
+        }
+      
+        domeStatus = 1;  // Set dome status to preparing for a future turn
+               
+        #ifdef SHADOW_DEBUG
+          output += "Dome Automation: Initial Turn Set\r\n";
+          output +=  "Current Time: ";
+          output +=  millis();
+          output += "\r\n Next Start Time: ";
+          output += domeStartTurnTime;
+          output += "\r\n";
+          output += "Next Stop Time: ";
+          output += domeStopTurnTime;
+          output += "\r\n";          
+          output += "Dome Target Position: ";
+          output += domeTargetPosition;
+          output += "\r\n";          
+        #endif
+
+    }
+    
+    
+    if (domeStatus == 1)  // Dome is prepared for a future move - start the turn when ready
+    {
+      
+        if (domeStartTurnTime < millis())
+        {
+          
+             domeStatus = 2; 
+             
+             #ifdef SHADOW_DEBUG
+                output += "Dome Automation: Ready To Start Turn\r\n";
+             #endif
+          
+        }
+    }
+    
+    if (domeStatus == 2) // Dome is now actively turning until it reaches its stop time
+    {
+      
+        if (domeStopTurnTime > millis())
+        {
+          
+              domeSpeed = domeAutoSpeed * domeTurnDirection;
+          
+              SyR->motor(domeSpeed);
+
+             #ifdef SHADOW_DEBUG
+                output += "Turning Now!!\r\n";
+             #endif
+          
+          
+        } else  // turn completed - stop the motor
+        {
+              domeStatus = 0;
+              SyR->stop();
+
+              #ifdef SHADOW_DEBUG
+                 output += "STOP TURN!!\r\n";
+              #endif
+        }
+      
+    }
+  
+}
+
+// =======================================================================================
+//           Program Utility Functions - Called from various locations
+// =======================================================================================
+//Eebel Start
+String MakeSongCommand(int SongNumber){
+    //Takes the song number and makes a command to send to the Marcduino
+    //Valid songs are 804- 811 right now input is 1-8
+    SongNumber = SongNumber + 3;  //Adjust for numbering convention of Marcduino Song Files
+    String SongCommand = "";
+    SongCommand += "$8";
+    SongCommand += String(SongNumber);
+    SongCommand += "\r";
+    output += SongCommand;//For debugging
+
+    return SongCommand;   
+}
+
+//Eebel End
+// =======================================================================================
+//           PPS3 Controller Device Mgt Functions
+// =======================================================================================
+
+void onInitPS3NavFoot()
+{
+    String btAddress = getLastConnectedBtMAC();
+    PS3NavFoot->setLedOn(LED1);
+    isPS3NavigatonInitialized = true;
+    badPS3Data = 0;
+
+    #ifdef SHADOW_DEBUG
+      output += "\r\nBT Address of Last connected Device when FOOT PS3 Connected: ";
+      output += btAddress;
+    #endif
+    
+    if (btAddress == PS3ControllerFootMac || btAddress == PS3ControllerBackupFootMac)
+    {
+        
+          #ifdef SHADOW_DEBUG
+             output += "\r\nWe have our FOOT controller connected.\r\n";
+          #endif
+          
+          mainControllerConnected = true;
+          WaitingforReconnect = true;
+          
+    } else
+    {
+      
+        // Prevent connection from anything but the MAIN controllers          
+        #ifdef SHADOW_DEBUG
+              output += "\r\nWe have an invalid controller trying to connect as tha FOOT controller, it will be dropped.\r\n";
+        #endif
+
+        ST->stop();
+        SyR->stop();
+        isFootMotorStopped = true;
+        footDriveSpeed = 0;
+        PS3NavFoot->setLedOff(LED1);
+        PS3NavFoot->disconnect();
+        printOutput();
+    
+        isPS3NavigatonInitialized = false;
+        mainControllerConnected = false;
+        
+    } 
+}
+
+void onInitPS3NavDome()
+{
+    String btAddress = getLastConnectedBtMAC();
+    PS3NavDome->setLedOn(LED1);
+    isSecondaryPS3NavigatonInitialized = true;
+    badPS3Data = 0;
+    
+    if (btAddress == PS3ControllerDomeMAC || btAddress == PS3ControllerBackupDomeMAC)
+    {
+        
+          #ifdef SHADOW_DEBUG
+             output += "\r\nWe have our DOME controller connected.\r\n";
+          #endif
+          
+          domeControllerConnected = true;
+          WaitingforReconnectDome = true;
+          
+    } else
+    {
+      
+        // Prevent connection from anything but the DOME controllers          
+        #ifdef SHADOW_DEBUG
+              output += "\r\nWe have an invalid controller trying to connect as the DOME controller, it will be dropped.\r\n";
+        #endif
+
+        ST->stop();
+        SyR->stop();
+        isFootMotorStopped = true;
+        footDriveSpeed = 0;
+        PS3NavDome->setLedOff(LED1);
+        PS3NavDome->disconnect();
+        printOutput();
+    
+        isSecondaryPS3NavigatonInitialized = false;
+        domeControllerConnected = false;
+        
+    } 
+}
+
+/*
+// Old buggy code
+// Those lines marked in yellow are needed, since if your last two digits of controllers MAC ends in 0x (08 for instance) it will never be paired since onInitPS3NavDome() and onInitPS3NavFoot() will fail 100% sure
+String getLastConnectedBtMAC()
+{
+    String btAddress = "";
+    for(int8_t i = 5; i > 0; i--)
+    {
+        if (Btd.disc_bdaddr[i]<0x10)
+        {
+            btAddress +="0";
+        }
+        btAddress += String(Btd.disc_bdaddr[i], HEX);
+        btAddress +=(":");
+    }
+    btAddress += String(Btd.disc_bdaddr[0], HEX);
+    btAddress.toUpperCase();
+    return btAddress; 
+}
+*/
+
+String getLastConnectedBtMAC()
+{
+    String btAddress = "";
+
+    for (int8_t i = 5; i > 0; i--)
+    {
+        if (Btd.disc_bdaddr[i] < 0x10)
+        {
+            btAddress += "0";
+        }
+        btAddress += String(Btd.disc_bdaddr[i], HEX);
+        btAddress += (":");
+    }
+
+    if (Btd.disc_bdaddr[0] < 0x10)
+    {
+        btAddress += "0";
+    }
+
+    btAddress += String(Btd.disc_bdaddr[0], HEX);
+    btAddress.toUpperCase();
+    return btAddress;
+}
+
+boolean criticalFaultDetect()
+{
+    if (PS3NavFoot->PS3NavigationConnected || PS3NavFoot->PS3Connected)
+    {
+        
+        currentTime = millis();
+        lastMsgTime = PS3NavFoot->getLastMessageTime();
+        msgLagTime = currentTime - lastMsgTime;            
+        
+        if (WaitingforReconnect)
+        {
+            
+            if (msgLagTime < 200)
+            {
+             
+                WaitingforReconnect = false; 
+            
+            }
+            
+            lastMsgTime = currentTime;
+            
+        } 
+        
+        if ( currentTime >= lastMsgTime)
+        {
+              msgLagTime = currentTime - lastMsgTime;
+              
+        } else
+        {
+
+             msgLagTime = 0;
+        }
+        
+        if (msgLagTime > 300 && !isFootMotorStopped)
+        {
+            #ifdef SHADOW_DEBUG
+              output += "It has been 300ms since we heard from the PS3 Foot Controller\r\n";
+              output += "Shut downing motors, and watching for a new PS3 Foot message\r\n";
+            #endif
+            ST->stop();
+            isFootMotorStopped = true;
+            footDriveSpeed = 0;
+        }
+        
+        if ( msgLagTime > 10000 )
+        {
+            #ifdef SHADOW_DEBUG
+              output += "It has been 10s since we heard from the PS3 Foot Controller\r\n";
+              output += "msgLagTime:";
+              output += msgLagTime;
+              output += "  lastMsgTime:";
+              output += lastMsgTime;
+              output += "  millis:";
+              output += millis();            
+              output += "\r\nDisconnecting the Foot controller.\r\n";
+            #endif
+            ST->stop();
+            isFootMotorStopped = true;
+            footDriveSpeed = 0;
+            PS3NavFoot->disconnect();
+            WaitingforReconnect = true;
+            return true;
+        }
+
+        //Check PS3 Signal Data
+        if(!PS3NavFoot->getStatus(Plugged) && !PS3NavFoot->getStatus(Unplugged))
+        {
+          Serial.println("\r\nSignal Check");
+            //We don't have good data from the controller.
+            //Wait 15ms if no second controller - 100ms if some controller connected, Update USB, and try again
+            if (PS3NavDome->PS3NavigationConnected)
+            {
+                  delay(100);     
+            } else
+            {
+                  delay(15);
+            }
+            
+            Usb.Task();   
+            lastMsgTime = PS3NavFoot->getLastMessageTime();
+            
+            if(!PS3NavFoot->getStatus(Plugged) && !PS3NavFoot->getStatus(Unplugged))
+            {
+                badPS3Data++;
+                #ifdef SHADOW_DEBUG
+                    output += "\r\n**Invalid data from PS3 FOOT Controller. - Resetting Data**\r\n";
+                #endif
+                return true;
+            }
+        }
+        else if (badPS3Data > 0)
+        {
+
+            badPS3Data = 0;
+        }
+        
+        if ( badPS3Data > 10 )
+        {
+            #ifdef SHADOW_DEBUG
+                output += "Too much bad data coming from the PS3 FOOT Controller\r\n";
+                output += "Disconnecting the controller and stop motors.\r\n";
+            #endif
+            ST->stop();
+            isFootMotorStopped = true;
+            footDriveSpeed = 0;
+            PS3NavFoot->disconnect();
+            WaitingforReconnect = true;
+            return true;
+        }
+    }
+    else if (!isFootMotorStopped)
+    {
+        #ifdef SHADOW_DEBUG      
+            output += "No foot controller was found\r\n";
+            output += "Shuting down motors and watching for a new PS3 foot message\r\n";
+        #endif
+        ST->stop();
+        isFootMotorStopped = true;
+        footDriveSpeed = 0;
+        WaitingforReconnect = true;
+        return true;
+    }
+    
+    return false;
+}
+
+boolean criticalFaultDetectDome()
+{
+    if (PS3NavDome->PS3NavigationConnected || PS3NavDome->PS3Connected)
+    {
+
+        currentTime = millis();
+        lastMsgTime = PS3NavDome->getLastMessageTime();
+        msgLagTime = currentTime - lastMsgTime;            
+        
+        if (WaitingforReconnectDome)
+        {
+            if (msgLagTime < 200)
+            {
+             
+                WaitingforReconnectDome = false; 
+            
+            }
+            
+            lastMsgTime = currentTime;
+            
+        }
+        
+        if ( currentTime >= lastMsgTime)
+        {
+             msgLagTime = currentTime - lastMsgTime;
+              
+        } else
+        {
+             msgLagTime = 0;
+        }
+        
+        if ( msgLagTime > 10000 )
+        {
+            #ifdef SHADOW_DEBUG
+              output += "It has been 10s since we heard from the PS3 Dome Controller\r\n";
+              output += "msgLagTime:";
+              output += msgLagTime;
+              output += "  lastMsgTime:";
+              output += lastMsgTime;
+              output += "  millis:";
+              output += millis();            
+              output += "\r\nDisconnecting the Dome controller.\r\n";
+            #endif
+            
+            SyR->stop();
+            PS3NavDome->disconnect();
+            WaitingforReconnectDome = true;
+            return true;
+        }
+
+        //Check PS3 Signal Data
+        if(!PS3NavDome->getStatus(Plugged) && !PS3NavDome->getStatus(Unplugged))
+        {
+
+            // We don't have good data from the controller.
+            //Wait 100ms, Update USB, and try again
+            delay(100);
+            
+            Usb.Task();
+            lastMsgTime = PS3NavDome->getLastMessageTime();
+            
+            if(!PS3NavDome->getStatus(Plugged) && !PS3NavDome->getStatus(Unplugged))
+            {
+                badPS3DataDome++;
+                #ifdef SHADOW_DEBUG
+                    output += "\r\n**Invalid data from PS3 Dome Controller. - Resetting Data**\r\n";
+                #endif
+                return true;
+            }
+        } else if (badPS3DataDome > 0)
+        {
+             badPS3DataDome = 0;
+        }
+        
+        if ( badPS3DataDome > 10 )
+        {
+            #ifdef SHADOW_DEBUG
+                output += "Too much bad data coming from the PS3 DOME Controller\r\n";
+                output += "Disconnecting the controller and stop motors.\r\n";
+            #endif
+            SyR->stop();
+            PS3NavDome->disconnect();
+            WaitingforReconnectDome = true;
+            return true;
+        }
+    } 
+    
+    return false;
+}
+
+// =======================================================================================
+//           USB Read Function - Supports Main Program Loop
+// =======================================================================================
+
+boolean readUSB()
+{
+  
+     Usb.Task();
+     
+    //The more devices we have connected to the USB or BlueTooth, the more often Usb.Task need to be called to eliminate latency.
+    if (PS3NavFoot->PS3NavigationConnected) 
+    {
+        if (criticalFaultDetect())
+        {
+            //We have a fault condition that we want to ensure that we do NOT process any controller data!!!
+            printOutput();
+            return false;
+        }
+        
+    } else if (!isFootMotorStopped)
+    {
+        #ifdef SHADOW_DEBUG      
+            output += "No foot controller was found\r\n";
+            output += "Shuting down motors, and watching for a new PS3 foot message\r\n";
+        #endif
+        ST->stop();
+        isFootMotorStopped = true;
+        footDriveSpeed = 0;
+        WaitingforReconnect = true;
+    }
+
+     Usb.Task();
+
+    if (PS3NavDome->PS3NavigationConnected) 
+    {
+
+        if (criticalFaultDetectDome())
+        {
+           //We have a fault condition that we want to ensure that we do NOT process any controller data!!!
+           printOutput();
+           return false;
+        }
+    }
+    
+    return true;
+}
+
+// =======================================================================================
+//          Print Output Function
+// =======================================================================================
+
+void printOutput()
+{
+    if (output != "")
+    {
+        if (Serial) Serial.println(output);
+        output = ""; // Reset output string
+    }
+}
+
+void stopFootMotorIfRunning() {
+    if (!isFootMotorStopped) {
+        ST->stop();
+        isFootMotorStopped = true;
+        footDriveSpeed = 0;
+
+        #ifdef SHADOW_VERBOSE
+            output += "\r\n***Foot Motor STOPPED***\r\n";
+        #endif
+    }
+}
