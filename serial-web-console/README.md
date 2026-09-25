@@ -1,6 +1,6 @@
 # ShadowMD Lite — Web Serial console (Mega / Marcduino)
 
-![ShadowMD Lite web serial console — console + blueprint](2026-03-20-20-06-23.png)
+![ShadowMD Lite web serial console — console + blueprint](screenshot-console.png)
 
 ## What this is — and what it is not
 
@@ -25,8 +25,8 @@
 | File | Purpose |
 |------|---------|
 | `shadowmd-lite.svg` | **ShadowMD Lite** logo |
-| `logo.png` | Astromech branding ([source](https://www.astromech.com.es/assets/images/logo.png)) |
-| `2026-03-20-20-06-23.png` | Screenshot of the two-column UI (console + blueprint) |
+| `logo.png` | Astromech branding ([source](https://astromech.net/forums/images/tf_ideal/blue/misc/R2logo.png)) |
+| `screenshot-console.png` | Screenshot of the two-column UI (console + blueprint) |
 | `i18n.js` | English / Spanish strings for the UI (`index.html` loads this file) |
 | `r2d2plans.png` | Blueprint image (optional local file; falls back to a remote URL if missing) |
 
@@ -94,6 +94,6 @@ Marker colours: red = dome master, blue = dome slave / holos, green = body. Geom
 
 ## Screenshot
 
-![ShadowMD Lite web serial console — console + blueprint](2026-03-20-20-06-23.png)
+![ShadowMD Lite web serial console — console + blueprint](screenshot-console.png)
 
 Two-column layout: **Web Serial** connection, command line, receive log, and **blueprint-based** calibration (zones, PWM, holo tools).

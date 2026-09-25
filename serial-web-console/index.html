@@ -46,6 +46,10 @@
       object-fit: contain;
       display: block;
     }
+    /* Logo de Astromech.net: más alto que el wordmark, su texto no se lee a 48px */
+    .page-header img.logo-astromech {
+      height: 72px;
+    }
     /* SVG incrustado: evita fallos al abrir index.html como archivo (file://) */
     .logo-shadowmd {
       height: 48px;
@@ -242,11 +246,12 @@
     .blueprint-stage {
       position: relative;
       width: 75%;
-      max-width: 100%;
+      /* el plano es 592x729 (0.812:1): se limita por la altura libre para que el
+         droide entero quepa sin scroll en pantallas bajas */
+      max-width: min(100%, calc((100vh - 300px) * 0.812));
       margin: 0 auto;
       border: 1px solid var(--border);
       border-radius: 8px;
-      overflow: hidden;
       background: #0d1117;
     }
     .blueprint-stage img {
@@ -254,6 +259,7 @@
       height: auto;
       display: block;
       vertical-align: top;
+      border-radius: 8px;
     }
     .hotspots {
       position: absolute;
@@ -301,6 +307,16 @@
     }
     .hotspot:hover .hotspot-label,
     .hotspot.selected .hotspot-label { opacity: 1; }
+    .routing-help { margin: 0 0 0.75rem; }
+    .routing-help summary {
+      cursor: pointer;
+      font-size: 0.8rem;
+      color: var(--muted);
+      padding: 0.15rem 0;
+      user-select: none;
+    }
+    .routing-help summary:hover { color: var(--accent); }
+    .routing-help .hint { margin: 0.4rem 0 0; }
     .blueprint-controls label { display: block; margin-top: 0.65rem; margin-bottom: 0.25rem; }
     .blueprint-controls input[type="range"] {
       width: 100%;
@@ -353,7 +369,7 @@
         <text x="260" y="29" fill="#58a6ff" font-family="Segoe UI,system-ui,sans-serif" font-size="13" font-weight="700" text-anchor="middle">LITE</text>
       </svg>
       <span class="logo-sep" aria-hidden="true"></span>
-      <img src="logo.png" width="347" height="60" alt="Astromech" />
+      <img class="logo-astromech" src="logo.png" width="357" height="160" alt="Astromech.net" />
     </div>
     <div class="titles">
       <h1 data-i18n="h1Title">Serial console (USB)</h1>
@@ -403,7 +419,10 @@
         </select>
       </div>
     </div>
-    <p class="hint" style="margin-top: 0; margin-bottom: 0.75rem;" data-i18n-html="routingHint"></p>
+    <details class="routing-help">
+      <summary data-i18n="routingHelpSummary">Command routing — quick reference</summary>
+      <p class="hint" data-i18n-html="routingHint"></p>
+    </details>
     <div class="checks row">
       <label><input type="checkbox" id="cr" checked /> <span data-i18n-html="chkCr"></span></label>
       <label><input type="checkbox" id="lf" /> <span data-i18n-html="chkLf"></span></label>
