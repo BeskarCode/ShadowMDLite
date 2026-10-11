@@ -1,5 +1,7 @@
 # Shadow MD with Joy-Con support
 
+*Start at [../README.md](../README.md) if you have not read it. This file covers only what changed inside Eebel's sketch.*
+
 This is Eebel's Shadow MD, unchanged in behaviour, with one structural addition: the sketch no longer talks to the PS3 controller directly. It talks to a small controller interface, and behind that interface there is either a PS3 Move Navigation, exactly as before, or a single Nintendo Switch Joy-Con.
 
 **Why.** Sony stopped making the Nav years ago. The buttons work, the sticks drift, and replacements get more expensive and harder to find every year. A single Joy-Con is the closest thing still in production: one hand, pocket size, analog stick, USB-C charging, and it speaks the same classic Bluetooth HID that the Navs use, so no new hardware is needed. Same Mega ADK, same Bluetooth dongle.
