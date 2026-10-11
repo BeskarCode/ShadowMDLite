@@ -1,0 +1,217 @@
+// ---------------------------------------------------------------------------------------
+// DroidControllerLayer.ino
+//
+// Test bench for the controller abstraction layer. It does NOT drive a droid: no
+// Sabertooth, no SyRen, no MarcDuino, nothing that can move. It reads controllers through
+// the DroidController interface and prints what it sees, so the layer can be verified
+// before a single line of ShadowMDLite.ino is touched.
+//
+// Hardware: the same Arduino Mega ADK, USB Host Shield and Bluetooth dongle as the droid.
+//
+// ---------------------------------------------------------------------------------------
+// HOW TO RUN IT
+//
+// 1. Pick what you are testing below with TEST_MODE.
+// 2. For the first run with new Joy-Cons, set PAIR_NEW_DEVICE to true, upload, then hold
+//    the small sync button on the Joy-Con rail until its LEDs run back and forth. Once it
+//    connects, set PAIR_NEW_DEVICE back to false and upload again, so it reconnects on its
+//    own from then on.
+// 3. Serial Monitor at 115200.
+//
+// WHAT TO CHECK
+//
+//   - Both controllers connect, left lights LED1 and right lights LED2.
+//   - Leave the sticks alone for the first second: that is the auto centring. After it,
+//     the stick must read 0,0 at rest and legacy 128,128.
+//   - Full deflection reaches roughly +/-512. If it saturates too early or never gets
+//     there, adjust setStickRange().
+//   - Pushing the stick AWAY from you gives NEGATIVE y. That is the Nav convention and the
+//     droid logic depends on it.
+//   - Every button prints the right role. DB_B is unmapped on a Joy-Con by design, see the
+//     mapping notes in JoyConController.h.
+//   - A click prints once per press, not continuously.
+//   - Walking out of range makes lag climb. That is what stops the motors on a real droid.
+// ---------------------------------------------------------------------------------------
+
+#include <usbhub.h>
+#include <PS3BT.h>
+
+#include "DroidController.h"
+#include "PS3NavController.h"
+#include "JoyConController.h"
+
+// --- configuration ----------------------------------------------------------------------
+#define TEST_PS3NAV   0   // set to 1 to test the PS3 Navs
+#define TEST_JOYCON   1   // set to 1 to test the Joy-Cons
+
+const bool PAIR_NEW_DEVICE = false;   // true only while pairing a controller for the first time
+// -----------------------------------------------------------------------------------------
+
+USB Usb;
+BTD Btd(&Usb);
+
+#if TEST_PS3NAV
+PS3NavController navFoot(&Btd, "NAV-FOOT", LED1);
+PS3NavController navDome(&Btd, "NAV-DOME", LED2);
+#endif
+
+#if TEST_JOYCON
+JoyConController joyFoot(&Btd, JOYCON_LEFT,  "JOY-L", PAIR_NEW_DEVICE);
+JoyConController joyDome(&Btd, JOYCON_RIGHT, "JOY-R", PAIR_NEW_DEVICE);
+#endif
+
+// Same dead zones as the main sketch, converted to the normalised scale.
+const int16_t footDeadZone = DroidController::legacyDeadzone(15);
+const int16_t domeDeadZone = DroidController::legacyDeadzone(10);
+
+uint32_t lastPrint = 0;
+uint32_t _buzzUntil = 0;
+
+void setup()
+{
+  Serial.begin(115200);
+  while (!Serial);
+
+  Serial.println(F("\r\n=== Droid Controller Layer test bench ==="));
+  Serial.println(F("Nothing here drives motors. Safe to run with the droid powered down."));
+
+  if (Usb.Init() == -1)
+  {
+    Serial.println(F("USB host did not start. HALT."));
+    while (1);
+  }
+  Serial.println(F("USB + Bluetooth library started."));
+
+#if TEST_PS3NAV
+  navFoot.begin();
+  navDome.begin();
+#endif
+#if TEST_JOYCON
+  joyFoot.begin();
+  joyDome.begin();
+
+  // A Joy-Con stick is physically smaller than a Nav's, so a slightly tighter dead zone
+  // feels better. Left as the sketch default here on purpose, so the numbers printed are
+  // comparable between the two controllers.
+  joyFoot.setGrip(JOYCON_UPRIGHT);
+  joyDome.setGrip(JOYCON_UPRIGHT);
+#endif
+
+  if (PAIR_NEW_DEVICE)
+    Serial.println(F("\r\nPAIRING MODE: hold the sync button on the controller now."));
+  else
+    Serial.println(F("\r\nWaiting for controllers to reconnect..."));
+
+  Serial.println();
+}
+
+void loop()
+{
+  Usb.Task();
+
+#if TEST_PS3NAV
+  navFoot.update();
+  navDome.update();
+#endif
+#if TEST_JOYCON
+  joyFoot.update();
+  joyDome.update();
+#endif
+
+  if (millis() - lastPrint < 500) return;
+  lastPrint = millis();
+
+#if TEST_PS3NAV
+  report(navFoot, footDeadZone);
+  report(navDome, domeDeadZone);
+  if (navFoot.clicked(DB_A)) Serial.println(F("  [click] NAV-FOOT A"));
+#endif
+
+#if TEST_JOYCON
+  reportJoyCon(joyFoot, footDeadZone);
+  reportJoyCon(joyDome, domeDeadZone);
+
+  // Edge detection check: once per press, never repeatedly.
+  if (joyFoot.clicked(DB_A))   Serial.println(F("  [click] JOY-L A"));
+  if (joyFoot.clicked(DB_SYS)) Serial.println(F("  [click] JOY-L SYS"));
+  if (joyDome.clicked(DB_A))   Serial.println(F("  [click] JOY-R A"));
+
+  // The combination ShadowMD Lite uses for the voice toggle, read through the layer, and
+  // confirmed on the controller itself with a buzz. A Nav cannot do this.
+  if (joyFoot.clicked(DB_DOWN | DB_L1))
+  {
+    Serial.println(F("  [combo] DOWN + L1 -> would toggle voice mode"));
+    joyFoot.buzz(true);
+    _buzzUntil = millis() + 200;
+  }
+  if (_buzzUntil && millis() > _buzzUntil)
+  {
+    joyFoot.buzz(false);
+    _buzzUntil = 0;
+  }
+#endif
+}
+
+
+void report(DroidController& c, int16_t deadZone)
+{
+  Serial.print(c.name());
+  Serial.print(F(": "));
+
+  if (!c.isConnected())
+  {
+    Serial.println(F("not connected"));
+    return;
+  }
+
+  Serial.print(F("x="));
+  Serial.print(DroidController::deadzone(c.x(), deadZone));
+  Serial.print(F(" y="));
+  Serial.print(DroidController::deadzone(c.y(), deadZone));
+  Serial.print(F("  legacy("));
+  Serial.print(c.legacyX());
+  Serial.print(F(","));
+  Serial.print(c.legacyY());
+  Serial.print(F(")  lag="));
+  Serial.print(c.millisSinceLastMessage());
+  Serial.print(F("ms  buttons: "));
+
+  printButtons(c);
+  Serial.println();
+}
+
+#if TEST_JOYCON
+void reportJoyCon(JoyConController& c, int16_t deadZone)
+{
+  if (c.isConnected() && c.isCalibrating())
+  {
+    Serial.print(c.name());
+    Serial.println(F(": centring the stick, do not touch it"));
+    return;
+  }
+
+  report(c, deadZone);
+
+  if (c.isConnected())
+  {
+    Serial.print(F("        battery: "));
+    Serial.print(c.batteryLevel());
+    Serial.println(F("/4"));
+  }
+}
+#endif
+
+void printButtons(DroidController& c)
+{
+  if (c.pressed(DB_UP))    Serial.print(F("UP "));
+  if (c.pressed(DB_DOWN))  Serial.print(F("DOWN "));
+  if (c.pressed(DB_LEFT))  Serial.print(F("LEFT "));
+  if (c.pressed(DB_RIGHT)) Serial.print(F("RIGHT "));
+  if (c.pressed(DB_A))     Serial.print(F("A "));
+  if (c.pressed(DB_B))     Serial.print(F("B "));
+  if (c.pressed(DB_L1))    Serial.print(F("L1 "));
+  if (c.pressed(DB_L2))    Serial.print(F("L2 "));
+  if (c.pressed(DB_STICK)) Serial.print(F("STICK "));
+  if (c.pressed(DB_SYS))   Serial.print(F("SYS "));
+  if (!c.anyPressed())     Serial.print(F("-"));
+}

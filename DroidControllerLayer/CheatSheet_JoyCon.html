@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ShadowMD Lite - Joy-Con cheat sheet</title>
+<style>
+  :root{
+    --ink:#1c1c1c; --muted:#6b6b6b; --line:#d8d4cc; --paper:#fffdf8;
+    --left:#3f7fd1; --right:#d14b4b; --bank1:#2f6f4f; --bank2:#8a5a00; --bank3:#6a4b9c;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:24px;background:#eceae4;color:var(--ink);
+       font-family:"Segoe UI",system-ui,-apple-system,sans-serif;font-size:13px;line-height:1.45}
+  .sheet{background:var(--paper);max-width:1000px;margin:0 auto 28px;padding:28px 32px 34px;
+         border:1px solid var(--line);box-shadow:0 2px 10px rgba(0,0,0,.08)}
+  h1{font-size:20px;margin:0 0 2px}
+  h2{font-size:16px;margin:0 0 18px;font-weight:600}
+  .sub{color:var(--muted);font-size:12px;margin:0 0 18px}
+  .top{display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start}
+  .legend{flex:1;min-width:280px}
+  table{border-collapse:collapse;width:100%;font-size:12px}
+  th,td{border:1px solid var(--line);padding:5px 8px;text-align:left;vertical-align:top}
+  th{background:#f2efe8;font-weight:600}
+  td.k{white-space:nowrap;font-weight:600}
+  .bank{margin-top:20px}
+  .bank h3{font-size:13px;margin:0 0 6px;padding:4px 8px;color:#fff;border-radius:3px;display:inline-block}
+  .b0 h3{background:#444}
+  .b1 h3{background:var(--bank1)}
+  .b2 h3{background:var(--bank2)}
+  .b3 h3{background:var(--bank3)}
+  .b4 h3{background:#2b4c7e}
+  .note{margin-top:22px;padding:10px 12px;background:#f6f3ec;border-left:3px solid #b9b2a4;font-size:12px}
+  .badge{font:600 11px/1 "Segoe UI";fill:#fff}
+  .lbl{font:600 11px/1 "Segoe UI";fill:#1c1c1c}
+  .dim{font:11px/1 "Segoe UI";fill:#8a8a8a}
+  .foot{margin-top:26px;font-size:11px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}
+  @media print{
+    body{background:#fff;padding:0}
+    .sheet{box-shadow:none;border:0;margin:0;page-break-after:always;max-width:none}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================ SHEET 1: FOOT ============================ -->
+<section class="sheet">
+  <h1>ShadowMD Lite &middot; Joy-Con cheat sheet</h1>
+  <h2>Sheet 1 of 2 &middot; FOOT controller &middot; LEFT Joy-Con</h2>
+  <p class="sub">Drives the droid and triggers dome panels, lights and sounds. Hold the Joy-Con upright, stick at the top, rail against your palm.</p>
+
+  <div class="top">
+    <svg width="250" height="470" viewBox="0 0 250 470" role="img" aria-label="Left Joy-Con button layout">
+      <!-- body -->
+      <rect x="55" y="30" width="130" height="410" rx="34" fill="#eef2f7" stroke="#3f7fd1" stroke-width="2.5"/>
+      <!-- rail -->
+      <rect x="169" y="55" width="14" height="360" rx="6" fill="#dfe6ef" stroke="#b9c6d8"/>
+      <!-- shoulder L -->
+      <rect x="55" y="12" width="92" height="22" rx="11" fill="#dfe6ef" stroke="#3f7fd1" stroke-width="2"/>
+      <circle cx="78" cy="23" r="9" fill="var(--left)"/><text class="badge" x="78" y="27" text-anchor="middle">4</text>
+      <!-- ZL behind -->
+      <rect x="92" y="0" width="60" height="16" rx="8" fill="#cfd9e6" stroke="#8aa3c4"/>
+      <circle cx="122" cy="8" r="9" fill="var(--left)"/><text class="badge" x="122" y="12" text-anchor="middle">5</text>
+      <!-- stick -->
+      <circle cx="113" cy="110" r="36" fill="#dfe6ef" stroke="#8aa3c4" stroke-width="2"/>
+      <circle cx="113" cy="110" r="22" fill="#cfd9e6" stroke="#8aa3c4"/>
+      <circle cx="113" cy="110" r="9" fill="var(--left)"/><text class="badge" x="113" y="114" text-anchor="middle">6</text>
+      <!-- d-pad diamond -->
+      <circle cx="113" cy="212" r="15" fill="#dfe6ef" stroke="#8aa3c4"/><text class="lbl" x="113" y="216" text-anchor="middle">&#9650;</text>
+      <circle cx="113" cy="292" r="15" fill="#dfe6ef" stroke="#8aa3c4"/><text class="lbl" x="113" y="296" text-anchor="middle">&#9660;</text>
+      <circle cx="75"  cy="252" r="15" fill="#dfe6ef" stroke="#8aa3c4"/><text class="lbl" x="75"  y="256" text-anchor="middle">&#9664;</text>
+      <circle cx="151" cy="252" r="15" fill="#dfe6ef" stroke="#8aa3c4"/><text class="lbl" x="151" y="256" text-anchor="middle">&#9654;</text>
+      <circle cx="113" cy="252" r="10" fill="var(--left)"/><text class="badge" x="113" y="256" text-anchor="middle">1</text>
+      <!-- minus -->
+      <rect x="138" y="66" width="20" height="5" rx="2" fill="#4a5664"/>
+      <circle cx="148" cy="52" r="9" fill="var(--left)"/><text class="badge" x="148" y="56" text-anchor="middle">2</text>
+      <!-- capture -->
+      <rect x="72" y="350" width="18" height="18" rx="4" fill="#4a5664"/>
+      <circle cx="81" cy="386" r="9" fill="var(--left)"/><text class="badge" x="81" y="390" text-anchor="middle">3</text>
+      <!-- SL/SR unused -->
+      <rect x="171" y="150" width="10" height="34" rx="4" fill="#cfd4da"/>
+      <rect x="171" y="250" width="10" height="34" rx="4" fill="#cfd4da"/>
+      <text class="dim" x="196" y="170">SL</text>
+      <text class="dim" x="196" y="270">SR</text>
+      <text class="dim" x="125" y="458" text-anchor="middle">102 x 36 mm &middot; 49 g</text>
+    </svg>
+
+    <div class="legend">
+      <table>
+        <tr><th style="width:34px"></th><th>Joy-Con button</th><th>Shadow role</th><th>Was on the Nav</th></tr>
+        <tr><td class="k">1</td><td>D-pad</td><td>Directions</td><td>D-pad</td></tr>
+        <tr><td class="k">2</td><td>Minus</td><td>Bank A</td><td>CROSS</td></tr>
+        <tr><td class="k">3</td><td>Capture</td><td>Bank B</td><td>CIRCLE</td></tr>
+        <tr><td class="k">4</td><td>L</td><td>L1</td><td>L1</td></tr>
+        <tr><td class="k">5</td><td>ZL</td><td>L2</td><td>L2</td></tr>
+        <tr><td class="k">6</td><td>Stick click</td><td>Bank C</td><td>PS</td></tr>
+        <tr><td class="k">&mdash;</td><td>SL and SR</td><td>not used</td><td>&mdash;</td></tr>
+      </table>
+      <div class="note">
+        <b>Driving.</b> The stick drives. Holding <b>L</b> or <b>ZL</b> stops the motors, which is what lets you press combinations safely.<br>
+        <b>Stick off / on:</b> stick click + Minus / stick click + Capture.<br>
+        <b>Over speed toggle:</b> stick click + ZL.<br>
+        <b>Dome from the foot controller:</b> hold <b>ZL</b> and use the stick.
+      </div>
+    </div>
+  </div>
+
+  <div class="bank b0">
+    <h3>D-pad alone</h3>
+    <table>
+      <tr><th style="width:90px">Button</th><th style="width:48px">MD</th><th>Function</th></tr>
+      <tr><td class="k">&#9650; Up</td><td>2</td><td>Scream, all panels open</td></tr>
+      <tr><td class="k">&#9660; Down</td><td>11</td><td>Quiet mode reset: close panels, stop holos, stop sounds</td></tr>
+      <tr><td class="k">&#9664; Left</td><td>13</td><td>Mid awake reset: close panels, random sound, stop holos</td></tr>
+      <tr><td class="k">&#9654; Right</td><td>14</td><td>Full awake reset: close panels, random sound, holos move, lights on</td></tr>
+    </table>
+  </div>
+
+  <div class="bank b1">
+    <h3>Hold Minus + direction &nbsp;(bank A, was CROSS)</h3>
+    <table>
+      <tr><th style="width:90px">Button</th><th style="width:48px">MD</th><th>Function</th></tr>
+      <tr><td class="k">&#9650; Up</td><td>26</td><td>Volume up</td></tr>
+      <tr><td class="k">&#9660; Down</td><td>27</td><td>Volume down</td></tr>
+      <tr><td class="k">&#9664; Left</td><td>23</td><td>Front holo lights, toggle on and off</td></tr>
+      <tr><td class="k">&#9654; Right</td><td>24</td><td>Rear holo lights, toggle on and off</td></tr>
+    </table>
+  </div>
+
+  <div class="bank b2">
+    <h3>Hold Capture + direction &nbsp;(bank B, was CIRCLE)</h3>
+    <table>
+      <tr><th style="width:90px">Button</th><th style="width:48px">MD</th><th>Function</th></tr>
+      <tr><td class="k">&#9650; Up</td><td>16</td><td>Wave, one panel at a time, no sound</td></tr>
+      <tr><td class="k">&#9660; Down</td><td>21</td><td>Rhythmic cantina dance, no sound</td></tr>
+      <tr><td class="k">&#9664; Left</td><td>17</td><td>Fast smirk, back and forth, no sound</td></tr>
+      <tr><td class="k">&#9654; Right</td><td>19</td><td>Marching ants, no sound</td></tr>
+    </table>
+  </div>
+
+  <div class="bank b3">
+    <h3>Hold stick click + direction &nbsp;(bank C, was PS)</h3>
+    <table>
+      <tr><th style="width:90px">Button</th><th style="width:48px">MD</th><th>Function</th></tr>
+      <tr><td class="k">&#9650; Up</td><td>30</td><td>Open all dome panels, body doors and logic effect</td></tr>
+      <tr><td class="k">&#9660; Down</td><td>33</td><td>Close all dome and body panels</td></tr>
+      <tr><td class="k">&#9664; Left</td><td>89</td><td>Previous song</td></tr>
+      <tr><td class="k">&#9654; Right</td><td>88</td><td>Next song</td></tr>
+    </table>
+  </div>
+
+  <div class="bank b4">
+    <h3>Hold L + direction</h3>
+    <table>
+      <tr><th style="width:90px">Button</th><th style="width:48px">MD</th><th>Function</th></tr>
+      <tr><td class="k">&#9650; Up</td><td>9</td><td>Leia message</td></tr>
+      <tr><td class="k">&#9660; Down</td><td>&mdash;</td><td>Free. This is the slot the voice control build uses as its on and off switch</td></tr>
+      <tr><td class="k">&#9664; Left</td><td>3</td><td>Wave, one panel at a time, dome and body</td></tr>
+      <tr><td class="k">&#9654; Right</td><td>5</td><td>Wave 2: open every panel progressively, then close one by one</td></tr>
+    </table>
+  </div>
+
+  <p class="foot">ShadowMD Lite &middot; mapping as defined in <code>JoyConController.h</code>, <code>JOYCON_MAP_LEFT</code>. MD numbers are standard MarcDuino function codes.</p>
+</section>
+
+<!-- ============================ SHEET 2: DOME ============================ -->
+<section class="sheet">
+  <h1>ShadowMD Lite &middot; Joy-Con cheat sheet</h1>
+  <h2>Sheet 2 of 2 &middot; DOME controller &middot; RIGHT Joy-Con</h2>
+  <p class="sub">Rotates the dome and works the body: utility arms, tools and doors. The four face buttons take the place of the d-pad, in the diamond you see with the Joy-Con upright.</p>
+
+  <div class="top">
+    <svg width="250" height="470" viewBox="0 0 250 470" role="img" aria-label="Right Joy-Con button layout">
+      <rect x="65" y="30" width="130" height="410" rx="34" fill="#fdeeee" stroke="#d14b4b" stroke-width="2.5"/>
+      <rect x="67" y="55" width="14" height="360" rx="6" fill="#f6dede" stroke="#e0b3b3"/>
+      <!-- shoulder R -->
+      <rect x="103" y="12" width="92" height="22" rx="11" fill="#f6dede" stroke="#d14b4b" stroke-width="2"/>
+      <circle cx="172" cy="23" r="9" fill="var(--right)"/><text class="badge" x="172" y="27" text-anchor="middle">4</text>
+      <rect x="98" y="0" width="60" height="16" rx="8" fill="#eecaca" stroke="#cf9a9a"/>
+      <circle cx="128" cy="8" r="9" fill="var(--right)"/><text class="badge" x="128" y="12" text-anchor="middle">5</text>
+      <!-- face buttons diamond -->
+      <circle cx="137" cy="120" r="17" fill="#f6dede" stroke="#cf9a9a"/><text class="lbl" x="137" y="125" text-anchor="middle">X</text>
+      <circle cx="137" cy="200" r="17" fill="#f6dede" stroke="#cf9a9a"/><text class="lbl" x="137" y="205" text-anchor="middle">B</text>
+      <circle cx="99"  cy="160" r="17" fill="#f6dede" stroke="#cf9a9a"/><text class="lbl" x="99"  y="165" text-anchor="middle">Y</text>
+      <circle cx="175" cy="160" r="17" fill="#f6dede" stroke="#cf9a9a"/><text class="lbl" x="175" y="165" text-anchor="middle">A</text>
+      <circle cx="137" cy="160" r="10" fill="var(--right)"/><text class="badge" x="137" y="164" text-anchor="middle">1</text>
+      <!-- stick -->
+      <circle cx="137" cy="300" r="36" fill="#f6dede" stroke="#cf9a9a" stroke-width="2"/>
+      <circle cx="137" cy="300" r="22" fill="#eecaca" stroke="#cf9a9a"/>
+      <circle cx="137" cy="300" r="9" fill="var(--right)"/><text class="badge" x="137" y="304" text-anchor="middle">6</text>
+      <!-- plus -->
+      <path d="M96 62 h18 M105 53 v18" stroke="#4a5664" stroke-width="4"/>
+      <circle cx="105" cy="46" r="9" fill="var(--right)"/><text class="badge" x="105" y="50" text-anchor="middle">2</text>
+      <!-- home -->
+      <circle cx="170" cy="372" r="10" fill="#4a5664"/>
+      <circle cx="170" cy="400" r="9" fill="var(--right)"/><text class="badge" x="170" y="404" text-anchor="middle">3</text>
+      <!-- SL/SR -->
+      <rect x="69" y="150" width="10" height="34" rx="4" fill="#e3d4d4"/>
+      <rect x="69" y="250" width="10" height="34" rx="4" fill="#e3d4d4"/>
+      <text class="dim" x="36" y="170">SL</text>
+      <text class="dim" x="36" y="270">SR</text>
+      <text class="dim" x="130" y="458" text-anchor="middle">102 x 36 mm &middot; 52 g</text>
+    </svg>
+
+    <div class="legend">
+      <table>
+        <tr><th style="width:34px"></th><th>Joy-Con button</th><th>Shadow role</th><th>Was on the Nav</th></tr>
+        <tr><td class="k">1</td><td>X / B / Y / A</td><td>Up / Down / Left / Right</td><td>D-pad</td></tr>
+        <tr><td class="k">2</td><td>Plus</td><td>Bank A</td><td>CROSS</td></tr>
+        <tr><td class="k">3</td><td>Home</td><td>Bank B</td><td>CIRCLE</td></tr>
+        <tr><td class="k">4</td><td>R</td><td>L1</td><td>L1</td></tr>
+        <tr><td class="k">5</td><td>ZR</td><td>L2</td><td>L2</td></tr>
+        <tr><td class="k">6</td><td>Stick click</td><td>Bank C</td><td>PS</td></tr>
+        <tr><td class="k">&mdash;</td><td>SL and SR</td><td>not used</td><td>&mdash;</td></tr>
+      </table>
+      <div class="note">
+        <b>The dome stick rotates the dome.</b><br>
+        Combinations written as <i>dome + foot</i> need both controllers: hold the button on this one and press the modifier on the foot Joy-Con. That is how Shadow has always worked, and it is what gives you more functions than one controller has buttons.
+      </div>
+    </div>
+  </div>
+
+  <div class="bank b0">
+    <h3>Face buttons alone</h3>
+    <table>
+      <tr><th style="width:120px">Button</th><th style="width:48px">MD</th><th>Function</th></tr>
+      <tr><td class="k">X (up)</td><td>82</td><td>Open body doors, raise arms, work the tools, lower arms, close doors</td></tr>
+      <tr><td class="k">B (down)</td><td>56</td><td>Data panel door, toggle open and closed</td></tr>
+      <tr><td class="k">Y (left)</td><td>84</td><td>Use the interface tool</td></tr>
+      <tr><td class="k">A (right)</td><td>83</td><td>Use the gripper</td></tr>
+    </table>
+  </div>
+
+  <div class="bank b4">
+    <h3>Hold R + face button</h3>
+    <table>
+      <tr><th style="width:120px">Button</th><th style="width:48px">MD</th><th>Function</th></tr>
+      <tr><td class="k">X (up)</td><td>4</td><td>Fast smirk, back and forth wave</td></tr>
+      <tr><td class="k">B (down)</td><td>18</td><td>Wave 2, no sound</td></tr>
+      <tr><td class="k">Y (left)</td><td>83</td><td>Use the gripper</td></tr>
+      <tr><td class="k">A (right)</td><td>84</td><td>Use the interface tool</td></tr>
+    </table>
+  </div>
+
+  <div class="bank b1">
+    <h3>Dome face button + <span style="font-weight:400">Minus on the foot Joy-Con</span> &nbsp;(bank A)</h3>
+    <table>
+      <tr><th style="width:120px">Button</th><th style="width:48px">MD</th><th>Function</th></tr>
+      <tr><td class="k">X (up)</td><td>7</td><td>Faint or short circuit, utility arms toggle</td></tr>
+      <tr><td class="k">B (down)</td><td>79</td><td>Spook wave, dome and body</td></tr>
+      <tr><td class="k">Y (left)</td><td>30</td><td>Open all dome panels</td></tr>
+      <tr><td class="k">A (right)</td><td>33</td><td>Close all dome panels</td></tr>
+    </table>
+  </div>
+
+  <div class="bank b2">
+    <h3>Dome face button + <span style="font-weight:400">Capture on the foot Joy-Con</span> &nbsp;(bank B)</h3>
+    <table>
+      <tr><th style="width:120px">Button</th><th style="width:48px">MD</th><th>Function</th></tr>
+      <tr><td class="k">X (up)</td><td>8</td><td>Cantina dance, orchestral, rhythmic panel dance</td></tr>
+      <tr><td class="k">B (down)</td><td>87</td><td>Star Trek disco dance</td></tr>
+      <tr><td class="k">Y (left)</td><td>10</td><td>Disco</td></tr>
+      <tr><td class="k">A (right)</td><td>86</td><td>Star Wars disco dance</td></tr>
+    </table>
+  </div>
+
+  <div class="bank b3">
+    <h3>Dome face button + <span style="font-weight:400">stick click on the foot Joy-Con</span> &nbsp;(bank C)</h3>
+    <table>
+      <tr><th style="width:120px">Button</th><th style="width:48px">MD</th><th>Function</th></tr>
+      <tr><td class="k">X (up)</td><td>81</td><td>Utility arms open, then close</td></tr>
+      <tr><td class="k">B (down)</td><td>85</td><td>Ping pong body doors</td></tr>
+      <tr><td class="k">Y (left)</td><td>58</td><td>Top utility arm, toggle</td></tr>
+      <tr><td class="k">A (right)</td><td>60</td><td>Bottom utility arm, toggle</td></tr>
+    </table>
+  </div>
+
+  <p class="foot">ShadowMD Lite &middot; mapping as defined in <code>JoyConController.h</code>, <code>JOYCON_MAP_RIGHT</code>. Functions taken from <code>CheatSheet.md</code>, the PS3 Nav map, with the button roles translated one to one.</p>
+</section>
+
+</body>
+</html>
