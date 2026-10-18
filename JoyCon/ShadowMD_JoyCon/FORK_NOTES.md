@@ -43,7 +43,7 @@ That was the design goal. A port that rewrites every call site produces a diff n
 
 ## Requirements
 
-**USB Host Shield Library 2.0, version 1.7.0 or newer.** Older releases do not ship `SwitchProBT`, which the Joy-Con support is built on. If you stay on PS3 Navs, older versions still work.
+**USB Host Shield Library 2.0: the version depends on the controller.** For Joy-Cons you need **1.7.0 or newer**, because older releases do not ship `SwitchProBT`. For PS3 Navs, **keep the older library**: the Navs do not work with 1.7.0. Keep both copies around and install the one that matches the controller you build for. A PS3 Nav build does not include any Joy-Con code, so it compiles fine against the older library.
 
 ## Button map
 
@@ -67,11 +67,11 @@ L3 is the one that goes, because in the stock map almost nothing uses it: every 
 
 | Build | Flash | RAM |
 |---|---|---|
-| Original, untouched | 53,136 | 4,781 (58%) |
-| This fork, PS3 Nav | 52,368 | 5,295 (64%) |
-| This fork, Joy-Con | 55,452 | 5,391 (65%) |
+| Original, untouched, older library | 56,548 | 4,738 (57%) |
+| This fork, PS3 Nav, older library | 55,812 | 5,318 (64%) |
+| This fork, Joy-Con, library 1.7.0 | 55,452 | 5,391 (65%) |
 
-The PS3 Nav build comes out slightly smaller in flash than the original. RAM goes up by about 500 bytes, which on a Mega leaves roughly 2.8 KB free. That is enough, but it is worth knowing if you have already added things of your own to this sketch.
+Each build is measured with the library it actually needs (see Requirements). The PS3 Nav build comes out slightly smaller in flash than the original. RAM goes up by about 600 bytes, which on a Mega leaves roughly 2.8 KB free. That is enough, but it is worth knowing if you have already added things of your own to this sketch.
 
 ## What is tested and what is not
 

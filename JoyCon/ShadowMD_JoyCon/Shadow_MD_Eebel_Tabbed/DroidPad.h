@@ -21,9 +21,16 @@
 #ifndef DROID_PAD_H
 #define DROID_PAD_H
 
+#include "ControllerConfig.h"
 #include "DroidController.h"
 #include "PS3NavController.h"
-#include "JoyConController.h"
+
+// Only pulled in for Joy-Con builds. It needs SwitchProBT, which only exists in USB Host
+// Shield 1.7.0, and PS3 Navs do not work with 1.7.0. So a PS3 Nav build has to keep
+// compiling against the older library, with no trace of the Joy-Con code in it.
+#ifdef USE_JOYCON
+  #include "JoyConController.h"
+#endif
 
 class DroidPad
 {

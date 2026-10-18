@@ -544,6 +544,10 @@ int marcDuinoBaudRate = 9600; // Set the baud rate for the Syren motor controlle
 #include <PS3BT.h>
 #include <usbhub.h>
 
+// Controller abstraction: pick PS3 Navs or Joy-Cons in ControllerConfig.h
+#include "ControllerConfig.h"
+#include "DroidPad.h"
+
 #ifdef CANBUS
   #include <mcp_can.h>
   #include <SPI.h>
@@ -594,10 +598,23 @@ Sabertooth *SyR=new Sabertooth(SYREN_ADDR, Serial2);
 ///////Setup for USB and Bluetooth Devices////////////////////////////
 USB Usb;
 BTD Btd(&Usb);
-PS3BT PS3NavFootImpl(&Btd);
-PS3BT PS3NavDomeImpl(&Btd);
-PS3BT* PS3NavFoot=&PS3NavFootImpl;
-PS3BT* PS3NavDome=&PS3NavDomeImpl;
+
+// The sketch keeps calling PS3NavFoot and PS3NavDome exactly as it always has: the pointers
+// still answer getButtonPress(), getAnalogHat(), PS3NavigationConnected and the rest.
+// Which physical controller is behind them is decided in ControllerConfig.h.
+#ifdef USE_PS3_NAV
+  PS3NavController navFootImpl(&Btd, "FOOT", LED1);
+  PS3NavController navDomeImpl(&Btd, "DOME", LED2);
+  DroidPad footPad(&navFootImpl, &navFootImpl);
+  DroidPad domePad(&navDomeImpl, &navDomeImpl);
+#else
+  JoyConController joyFootImpl(&Btd, JOYCON_LEFT,  "FOOT", JOYCON_PAIRING_MODE);
+  JoyConController joyDomeImpl(&Btd, JOYCON_RIGHT, "DOME", JOYCON_PAIRING_MODE);
+  DroidPad footPad(&joyFootImpl);
+  DroidPad domePad(&joyDomeImpl);
+#endif
+DroidPad* PS3NavFoot=&footPad;
+DroidPad* PS3NavDome=&domePad;
 
 #ifdef CANBUS
 MCP_CAN CAN0(SS);   // Set CS to pin SS
@@ -699,6 +716,8 @@ void setup()
 
     //Setup for PS3
     Serial.print(F("\r\nRegistering Controller Events... "));
+    PS3NavFoot->begin();
+    PS3NavDome->begin();
     PS3NavFoot->attachOnInit(onInitPS3NavFoot); // onInitPS3NavFoot is called upon a new connection
     PS3NavDome->attachOnInit(onInitPS3NavDome); 
     Serial.print(F("done.\r\n"));
@@ -964,7 +983,7 @@ void loop()
 //           footDrive Motor Control Section
 // =======================================================================================
 
-boolean ps3FootMotorDrive(PS3BT* myPS3 = PS3NavFoot)
+boolean ps3FootMotorDrive(DroidPad* myPS3 = PS3NavFoot)
 {
   int stickSpeed = 0;
   int turnnum = 0;
@@ -1178,7 +1197,7 @@ void footMotorDrive()
 //           domeDrive Motor Control Section
 // =======================================================================================
 
-int ps3DomeDrive(PS3BT* myPS3 = PS3NavDome)
+int ps3DomeDrive(DroidPad* myPS3 = PS3NavDome)
 {
     int domeRotationSpeed = 0;
       
@@ -1285,7 +1304,7 @@ void domeDrive()
 //                               Toggle Control Section
 // =======================================================================================
 
-void ps3ToggleSettings(PS3BT* myPS3 = PS3NavFoot)
+void ps3ToggleSettings(DroidPad* myPS3 = PS3NavFoot)
 {
 
     // enable / disable drive stick
@@ -1312,7 +1331,12 @@ void ps3ToggleSettings(PS3BT* myPS3 = PS3NavFoot)
     }
     
     // Enable and Disable Overspeed
+    // A Joy-Con has no L3, so there the toggle is stick click + ZL (PS + L2 to the sketch)
+    #ifdef USE_JOYCON
+    if (myPS3->getButtonPress(PS) && myPS3->getButtonPress(L2) && isStickEnabled)
+    #else
     if (myPS3->getButtonPress(L3) && myPS3->getButtonPress(L1) && isStickEnabled)
+    #endif
     {
       
        if ((millis() - previousSpeedToggleMillis) > 1000)
@@ -2819,6 +2843,10 @@ boolean readUSB()
 {
   
      Usb.Task();
+
+     // Controller abstraction: refresh both controllers once per loop, right after Usb.Task()
+     PS3NavFoot->update();
+     PS3NavDome->update();
      
     //The more devices we have connected to the USB or BlueTooth, the more often Usb.Task need to be called to eliminate latency.
     if (PS3NavFoot->PS3NavigationConnected) 

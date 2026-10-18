@@ -2,6 +2,33 @@
 
 ![ShadowMD Lite web serial console (USB + blueprint)](serial-web-console/2026-03-20-20-06-23.png)
 
+---
+
+## 11. Joy-Con support
+
+ShadowMD Lite can run with a single Nintendo Switch Joy-Con in each hand instead of PS3 Navs: one hand, pocket size, analog stick, still in production. Same Mega ADK, same Bluetooth dongle. Driving with only the foot controller still works, as it does with one Nav.
+
+**Choosing the controller** is one line in [`ControllerConfig.h`](ControllerConfig.h), next to the sketch:
+
+```c
+#define USE_PS3_NAV        // original behaviour, two PS3 Navs
+//#define USE_JOYCON       // two Joy-Cons, left for the feet, right for the dome
+```
+
+**Library:** install the USB Host Shield version that matches the controller (see **§6.2**). A PS3 Nav build contains no Joy-Con code, so it compiles against the older library as before.
+
+**How it works:** the sketch no longer talks to `PS3BT` directly. `PS3NavFoot` and `PS3NavDome` are now `DroidPad` objects (`DroidPad.h`), a small shim that answers the same calls (`getButtonPress()`, `getAnalogHat()`, `PS3NavigationConnected`...) from either a PS3 Nav or a Joy-Con behind it. Every button map and MD code stays where it was.
+
+**What changes with Joy-Cons:** a Joy-Con has no L3, so the over speed toggle moves from `L3 + L1` to **stick click + ZL**, and the cross controller `dome arrow + foot L3` combos cannot be reached. In the stock map only one of those is assigned: **Up + L3, function 90 (random sounds, `$R`)**; move it to a free combo if you use it. Full button map, pairing steps and a bench test sketch that drives nothing are in [`JoyCon/`](JoyCon/README.md).
+
+| Build, Arduino Mega ADK | Flash | RAM |
+|---|---|---|
+| Before the controller layer, PS3 Nav | 49,660 | 4,463 (54%) |
+| PS3 Nav, older library | 50,160 | 4,551 (55%) |
+| Joy-Con, library 1.7.0 | 50,054 | 4,624 (56%) |
+
+**Status:** everything compiles. **Nothing has been tested on a droid yet.** Run `JoyCon/BenchTest` first and drive it in your workshop before taking it to an event.
+
 `ShadowMDLite` is a cleaned‑up, modernized version of the classic **Shadow MD** sketch for Arduino Mega ADK, designed to be easier to maintain and to work smoothly with **BetterDuino** firmware and **AstropixelsPlus** logic effects.
 
 This document explains what changed, why, and how to adapt the configuration.
@@ -270,7 +297,7 @@ To remap a button to a different MarcDuino function:
 ### 6.1 Hardware
 
 - Arduino Mega ADK rev3.
-- **PS3 Move Navigation** controller(s) (the small one-handed Move accessory, *not* standard PS3/DualShock controllers).
+- **PS3 Move Navigation** controller(s) (the small one-handed Move accessory, *not* standard PS3/DualShock controllers), **or Nintendo Switch Joy-Cons** (see **§11**).
   - Buttons available: D‑pad (UP, DOWN, LEFT, RIGHT), **L1**, **L2**, **L3** (stick click), **CROSS**, **CIRCLE**, **PS**. Face buttons are **only CROSS and CIRCLE**. No SELECT, TRIANGLE, SQUARE, START, or R1/R2/R3.
   - **Cross‑controller L3**: To avoid pressing L3 and a d‑pad direction on the same controller, L3 is used on the *other* controller: **Foot arrow + Dome L3** and **Dome arrow + Foot L3**. The 8 combos (`footBtn*L3_MD_func`, `domeBtn*L3_MD_func`) default to `0` (FREE); set to a MarcDuino code (1–89) to assign an action.
 - Sabertooth foot drive and SyRen 10 (or compatible) for dome.
@@ -282,7 +309,7 @@ To remap a button to a different MarcDuino function:
 ### 6.2 Arduino libraries
 
 - **USB Host Shield**  
-  (Kristian Lauszus / TKJ Electronics – used for PS3BT).
+  (Kristian Lauszus / TKJ Electronics – used for PS3BT). The version depends on the controller: for **PS3 Navs keep the older library** bundled in `SHADOW_MD_Arduino_Libraries` (the Navs do not work with 1.7.0); for **Joy-Cons use 1.7.0 or newer** (older releases do not ship `SwitchProBT`).
 - **Sabertooth**  
   (for dual motor driver control).
 - Standard AVR / Arduino core for Mega.

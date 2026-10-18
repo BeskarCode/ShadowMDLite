@@ -13,6 +13,7 @@ Everything compiles. **Nothing has been tested on a droid yet.** Run the bench t
 | I want to... | Open |
 |---|---|
 | Check my Joy-Cons connect and read correctly, without touching my droid | **`BenchTest/`** |
+| Run **ShadowMD Lite** with Joy-Cons | the main sketch at the root of this repo, **`ShadowMDLite.ino`**. Pick the controller in its `ControllerConfig.h` |
 | Run Eebel's Shadow MD with Joy-Cons instead of Navs | **`ShadowMD_JoyCon/`** |
 | Print the button map and keep it on the bench | **`CheatSheet_JoyCon.html`** |
 
@@ -20,7 +21,7 @@ Start with `BenchTest`. It drives nothing: no Sabertooth, no SyRen, no MarcDuino
 
 ## Requirements
 
-**USB Host Shield Library 2.0, version 1.7.0 or newer.** Older releases do not ship `SwitchProBT`, which the Joy-Con support is built on. If you stay on PS3 Navs, older versions still work.
+**USB Host Shield Library 2.0: the version depends on the controller.** For Joy-Cons you need **1.7.0 or newer**, because older releases do not ship `SwitchProBT`. For PS3 Navs, **keep the older library**: the Navs do not work with 1.7.0. Keep both copies around and install the one that matches the controller you build for. A PS3 Nav build does not include any Joy-Con code, so it compiles fine against the older library.
 
 Watch out for one thing in that library: the Switch shoulder buttons are `L`, `ZL`, `R` and `ZR`. The `L1` and `R1` enums land in empty slots of the Switch button table and read the wrong bit.
 
@@ -35,11 +36,11 @@ So there is a thin interface in between. The droid logic asks "is the stick push
 | `DroidController.h` | The interface. Button roles, normalised stick, click and release edges, watchdog timing. |
 | `PS3NavController.h` | The PS3 Nav implementation. The reference: it must behave exactly as before. |
 | `JoyConController.h` | A single Joy-Con, left or right, built on `SwitchProBT`. |
-| `DroidPad.h` | Only in the Shadow MD fork. A shim that speaks the old PS3BT API on the outside and answers from the interface on the inside, so the 161 call sites stay untouched. |
+| `DroidPad.h` | Used by ShadowMD Lite and the Shadow MD fork. A shim that speaks the old PS3BT API on the outside and answers from the interface on the inside, so the call sites stay untouched. It only includes the Joy-Con code when `USE_JOYCON` is selected, so a PS3 Nav build still compiles against the older library. |
 
 Adding another controller means writing one more implementation, and nothing else.
 
-**About the duplicated headers.** The same `.h` files appear inside `BenchTest/` and inside `ShadowMD_JoyCon/Shadow_MD_Eebel_Tabbed/`. That is not an oversight: the Arduino IDE compiles the files that sit next to the sketch, so each sketch needs its own copy. They are identical. If you change one, change the other.
+**About the duplicated headers.** The same `.h` files appear at the root of the repo (next to `ShadowMDLite.ino`), inside `BenchTest/` and inside `ShadowMD_JoyCon/Shadow_MD_Eebel_Tabbed/`. That is not an oversight: the Arduino IDE compiles the files that sit next to the sketch, so each sketch needs its own copy. They are identical. If you change one, change the other.
 
 ## Button map
 
@@ -56,6 +57,8 @@ A Joy-Con has nine usable buttons, the same count as a Nav, but not the same nin
 | nothing | nothing | L3 |
 
 L3 is the one that goes, because in the stock map almost nothing uses it: every cross controller L3 combination is FREE. The single function that moves is the over speed toggle, which was `L3 + L1` and is now `stick click + ZL`. Sacrificing CIRCLE instead would have cost eight working functions.
+
+In ShadowMD Lite there is one more thing to know: of the cross controller `dome arrow + foot L3` combos, only **Up + L3** is assigned in the stock map, to function 90 (random sounds, `$R`). With Joy-Cons it cannot be reached, so move it to a free combo if you use it.
 
 `SL` and `SR` on the rail are not exposed by the Switch Pro parser, and they are awkward to reach while gripping the controller anyway.
 

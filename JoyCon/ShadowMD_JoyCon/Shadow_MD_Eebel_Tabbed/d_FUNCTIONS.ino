@@ -388,7 +388,12 @@ void ps3ToggleSettings(DroidPad* myPS3 = PS3NavFoot)
     }
     
     // Enable and Disable Overspeed
+    // A Joy-Con has no L3, so there the toggle is stick click + ZL (PS + L2 to the sketch)
+    #ifdef USE_JOYCON
+    if (myPS3->getButtonPress(PS) && myPS3->getButtonPress(L2) && isStickEnabled)
+    #else
     if (myPS3->getButtonPress(L3) && myPS3->getButtonPress(L1) && isStickEnabled)
+    #endif
     {
       
        if ((millis() - previousSpeedToggleMillis) > 1000)

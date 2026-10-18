@@ -1735,8 +1735,7 @@ int marcDuinoBaudRate = 9600; // Set the baud rate for the Syren motor controlle
 #include "ControllerConfig.h"
 #include "DroidController.h"
 #include "PS3NavController.h"
-#include "JoyConController.h"
-#include "DroidPad.h"
+#include "DroidPad.h"          // includes JoyConController.h only when USE_JOYCON is set
 
 // Satisfy IDE, which only needs to see the include statment in the ino.
 #ifdef dobogusinclude
