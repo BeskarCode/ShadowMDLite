@@ -14,7 +14,7 @@ Everything compiles. **Nothing has been tested on a droid yet.** Run the bench t
 |---|---|
 | Check my Joy-Cons connect and read correctly, without touching my droid | **`BenchTest/`** |
 | Run **ShadowMD Lite** with Joy-Cons | the main sketch at the root of this repo, **`ShadowMDLite.ino`**. Pick the controller in its `ControllerConfig.h` |
-| Run Eebel's Shadow MD with Joy-Cons instead of Navs | **`ShadowMD_JoyCon/`** |
+| Run Eebel's Shadow MD with Joy-Cons instead of Navs | its own repo, **[https://github.com/Fernando-Beltran/SHADOW_MD_EEBEL](https://github.com/Fernando-Beltran/SHADOW_MD_EEBEL)**. See `JOYCON.md` there |
 | Print the button map and keep it on the bench | **`CheatSheet_JoyCon.html`** |
 
 Start with `BenchTest`. It drives nothing: no Sabertooth, no SyRen, no MarcDuino. It only reads the controllers and prints what it sees over serial. If the numbers there look right, the rest will behave.
@@ -36,11 +36,11 @@ So there is a thin interface in between. The droid logic asks "is the stick push
 | `DroidController.h` | The interface. Button roles, normalised stick, click and release edges, watchdog timing. |
 | `PS3NavController.h` | The PS3 Nav implementation. The reference: it must behave exactly as before. |
 | `JoyConController.h` | A single Joy-Con, left or right, built on `SwitchProBT`. |
-| `DroidPad.h` | Used by ShadowMD Lite and the Shadow MD fork. A shim that speaks the old PS3BT API on the outside and answers from the interface on the inside, so the call sites stay untouched. It only includes the Joy-Con code when `USE_JOYCON` is selected, so a PS3 Nav build still compiles against the older library. |
+| `DroidPad.h` | Used by ShadowMD Lite and by the Shadow MD fork. A shim that speaks the old PS3BT API on the outside and answers from the interface on the inside, so the call sites stay untouched. It only includes the Joy-Con code when `USE_JOYCON` is selected, so a PS3 Nav build still compiles against the older library. |
 
 Adding another controller means writing one more implementation, and nothing else.
 
-**About the duplicated headers.** The same `.h` files appear at the root of the repo (next to `ShadowMDLite.ino`), inside `BenchTest/` and inside `ShadowMD_JoyCon/Shadow_MD_Eebel_Tabbed/`. That is not an oversight: the Arduino IDE compiles the files that sit next to the sketch, so each sketch needs its own copy. They are identical. If you change one, change the other.
+**About the duplicated headers.** The same `.h` files appear at the root of this repo (next to `ShadowMDLite.ino`), inside `BenchTest/`, and in the Shadow MD fork (https://github.com/Fernando-Beltran/SHADOW_MD_EEBEL). That is not an oversight: the Arduino IDE compiles the files that sit next to the sketch, so each sketch needs its own copy. They are identical. If you change one, change the other.
 
 ## Button map
 
@@ -78,4 +78,4 @@ Plug the Bluetooth dongle in before powering up the controllers. The library rea
 
 ## Credit
 
-The Shadow MD fork is Eebel's Shadow MD, from https://github.com/Eebel/SHADOW_MD_EEBEL, itself built on KnightShade's SHADOW. None of that behaviour has been changed.
+The Shadow MD fork (https://github.com/Fernando-Beltran/SHADOW_MD_EEBEL) is Eebel's Shadow MD, from https://github.com/Eebel/SHADOW_MD_EEBEL, itself built on KnightShade's SHADOW. None of that behaviour has been changed.
