@@ -69,15 +69,17 @@ L3 is the one that goes, because in the stock map almost nothing uses it: every 
 |---|---|---|
 | Original, untouched | 53,136 | 4,781 (58%) |
 | This fork, PS3 Nav | 52,368 | 5,295 (64%) |
-| This fork, Joy-Con | 55,452 | 5,391 (65%) |
+| This fork, Joy-Con | 56,774 | 5,485 (66%) |
 
 The PS3 Nav build comes out slightly smaller in flash than the original. RAM goes up by about 500 bytes, which on a Mega leaves roughly 2.8 KB free. That is enough, but it is worth knowing if you have already added things of your own to this sketch.
 
 ## What is tested and what is not
 
 - Both configurations compile clean. **Neither has been run on a droid yet.**
-- The Joy-Con implementation handles stick auto centring on connection, the different button map of each half, and grip orientation.
-- There is a bench test sketch, `DroidControllerLayer`, that reads controllers and prints what it sees without driving anything. Run that first, with the droid powered down.
+- `JoyConController.h` has passed the bench test with two real Joy-Cons connected at once: full scale on both sticks, all nine buttons on each half, link lag under 25 ms. The same file is used here.
+- The Joy-Con implementation handles the switch to full report mode, stick centring on connection, drift recentring while the stick rests, detecting which half connected, the different button map of each half, and grip orientation.
+- **Still open:** `joyFootImpl` and `joyDomeImpl` are filled in connection order. If the right Joy-Con connects first it becomes the foot controller. Wake the left one first until the fork routes by detected side.
+- There is a bench test sketch, `../BenchTest`, that reads controllers and prints what it sees without driving anything. Run that first, with the droid powered down.
 
 Do not take this to an event until you have driven it in your workshop.
 
