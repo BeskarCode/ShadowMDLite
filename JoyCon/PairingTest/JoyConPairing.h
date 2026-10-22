@@ -3,7 +3,8 @@
 //
 // Pairing Joy-Cons without editing or re-uploading the sketch.
 //
-//   - First boot: no Joy-Con recorded in EEPROM, so pairing starts by itself.
+//   - First boot: no Joy-Con recorded in EEPROM, so pairing starts by itself. The second
+//     (dome) Joy-Con is optional: one paired is enough to finish when the time runs out.
 //   - Re-pair: hold Minus + Capture (left) or Plus + Home (right) for 5 s on a connected
 //     Joy-Con, or reset the Mega three times within 10 s of each other, or (ShadowMD Lite)
 //     send JOYPAIR from the web console.
@@ -113,7 +114,7 @@ enum JoyConPairEvent : uint8_t
 {
   JCP_STARTED,           // pairing mode on: hold sync on a Joy-Con
   JCP_PAIRED_ONE,        // one Joy-Con paired, the other one is still missing
-  JCP_DONE,              // both halves paired, back to normal
+  JCP_DONE,              // finished: both halves, or one when the time ran out
   JCP_TIMEOUT,           // 60 s without finishing, back to normal
   JCP_HOLD_SYNC_AGAIN    // this Joy-Con still remembers another host: hold sync again
 };
@@ -139,17 +140,27 @@ public:
     const bool triple = jcpTripleReset(_rec.boots);
     EEPROM.put(JOYCON_EEPROM_ADDR, _rec);
 
-    if (triple || !_rec.complete() || force) request();
+    // Only when no Joy-Con is recorded at all: the dome Joy-Con is optional, as the second
+    // Nav always was, so a droid driven with one Joy-Con must not pair on every boot.
+    if (triple || _rec.sides == 0 || force) request();
   }
 
   // Call every loop, right after DroidPad::updatePair().
   void update()
   {
-    // Library quirk (USB Host Shield 1.7.0): l2capConnectionClaimed is only cleared when an
-    // incoming connection completes. Pairing is an outgoing connection, so with one Joy-Con
-    // already connected no free instance would open the HID channels for the new one.
-    if (_btd->connectToHIDDevice && _btd->l2capConnectionClaimed)
-      _btd->l2capConnectionClaimed = false;
+    // Library quirk (USB Host Shield 1.7.0): l2capConnectionClaimed is set when an instance
+    // claims a connection and only cleared when the next incoming connection completes.
+    // Pairing is an outgoing connection, so after one Joy-Con has connected the flag stays
+    // set and no free instance would open the HID channels for a newly paired one. Clear it
+    // once, when a Joy-Con has finished connecting: its claim is no longer needed. Clearing
+    // it while a connection is still being set up would let both instances grab the same
+    // Joy-Con.
+    for (uint8_t i = 0; i < 2; i++)
+    {
+      const bool c = _jc[i]->isConnected();
+      if (c && !_wasConnected[i]) _btd->l2capConnectionClaimed = false;
+      _wasConnected[i] = c;
+    }
 
     const uint32_t now = millis();
 
@@ -181,7 +192,9 @@ public:
       if (!_jc[i]->isConnected()) _known[i] = false;
     }
 
-    if (now - _start > JOYCON_PAIR_TIMEOUT_MS) end(JCP_TIMEOUT);
+    // Out of time. If one Joy-Con was paired in this session that is a success: the second
+    // one is optional.
+    if (now - _start > JOYCON_PAIR_TIMEOUT_MS) end(_pairedThisSession ? JCP_DONE : JCP_TIMEOUT);
   }
 
   // Start a pairing session (JOYPAIR command, combo, or from begin()).
@@ -189,6 +202,7 @@ public:
   {
     if (_active) return;
     _active = true;
+    _pairedThisSession = false;
     _start = _lastArm = millis();
     _verify = -1;
     for (uint8_t i = 0; i < 2; i++)
@@ -264,6 +278,7 @@ private:
     const uint8_t i = (uint8_t)_verify;
     _verify = -1;
     _known[i] = true;
+    _pairedThisSession = true;
     const DroidSlot slot = _jc[i]->preferredSlot();
     if (slot == SLOT_FOOT) _rec.sides |= JcpRecord::LEFT;
     if (slot == SLOT_DOME) _rec.sides |= JcpRecord::RIGHT;
@@ -288,14 +303,15 @@ private:
     if (_onEvent) _onEvent(JCP_HOLD_SYNC_AGAIN);
   }
 
-  // Hold Minus + Capture (left) or Plus + Home (right) for 5 s, stick centred, to pair.
+  // Hold Minus + Capture (left) or Plus + Home (right) for 5 s to pair. No stick condition:
+  // a drifting stick would block it, holding two face buttons for 5 s while driving does
+  // not happen, and the motors stop as soon as the session starts anyway.
   void checkCombos(uint32_t now)
   {
     for (uint8_t i = 0; i < 2; i++)
     {
       JoyConController* jc = _jc[i];
-      const bool held = jc->isConnected() && jc->pressed(DB_A | DB_B) &&
-                        abs(jc->x()) < DC_STICK_MAX / 8 && abs(jc->y()) < DC_STICK_MAX / 8;
+      const bool held = jc->isConnected() && jc->pressed(DB_A | DB_B);
       const uint8_t before = _hold[i].ticks();
       if (_hold[i].update(held, now)) { buzz(i, 500, now); request(); return; }
       if (_hold[i].ticks() > before) buzz(i, 120, now);   // one tick per second held
@@ -324,8 +340,10 @@ private:
   JcpRecord         _rec = { JcpRecord::MAGIC, 0, 0 };
   HoldTimer         _hold[2];
   bool              _known[2] = { false, false };
+  bool              _wasConnected[2] = { false, false };
   uint32_t          _buzzUntil[2] = { 0, 0 };
   bool              _active = false;
+  bool              _pairedThisSession = false;
   bool              _bootsCleared = false;
   uint32_t          _start = 0;
   uint32_t          _lastArm = 0;

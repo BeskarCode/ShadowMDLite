@@ -39,6 +39,29 @@ class JoyConBT : public SwitchProBT
 public:
   JoyConBT(BTD* p, bool pair) : SwitchProBT(p, pair) {}
 
+  // Rumble on or off right now. The library only sends its rumble report once a second from
+  // inside Parse(), so a short buzz would often never go out.
+  void rumbleNow(bool on)
+  {
+    uint8_t buf[10];
+    buf[0] = 0x10;                    // rumble only
+    buf[1] = _seq++ & 0x0F;
+    for (uint8_t side = 0; side < 2; side++)
+    {
+      uint8_t* r = &buf[2 + side * 4];
+      if (on) { r[0] = 0x28; r[1] = 0x88; r[2] = 0x60; r[3] = 0x61; }   // same as the library
+      else    { r[0] = 0x00; r[1] = 0x01; r[2] = 0x40; r[3] = 0x40; }   // neutral
+    }
+    sendOutputReport(buf, sizeof(buf));
+  }
+
+  // A Joy-Con ignores rumble until vibration is enabled with subcommand 0x48.
+  void enableVibration()
+  {
+    const uint8_t arg = 0x01;
+    sendSubcommand(0x48, &arg, 1);
+  }
+
   void requestFullReport()
   {
     const uint8_t arg = 0x30;         // full report
@@ -294,6 +317,7 @@ public:
         _map = (_side == JOYCON_LEFT) ? JOYCON_MAP_LEFT : JOYCON_MAP_RIGHT;
       }
       _ledAnimUntil = millis() + LED_ANIM_MS;   // "connected" signal, see below
+      _joy.enableVibration();                    // off by default; buzz() needs it
       _lastLedStep = 0;
       recalibrate();                       // centre must be measured on the right stick
       setStick(0, 0);
@@ -418,7 +442,7 @@ public:
 
   // A short buzz. Useful as confirmation when a mode changes, for instance entering voice
   // mode, which on a Nav you can only tell by listening to the droid.
-  void buzz(bool on) { _joy.setRumble(on, on); }
+  void buzz(bool on) { if (isConnected()) _joy.rumbleNow(on); }
 
   // While pairing: flash all four player LEDs, so the connected half shows the droid is
   // waiting for the other one. Off: back to its player LED.
@@ -445,8 +469,12 @@ private:
   void trackDrift(int16_t rawX, int16_t rawY)
   {
     const uint32_t now = millis();
-    const bool nearCentre = abs(rawX - _centreX) < DRIFT_MAX_OFFSET &&
-                            abs(rawY - _centreY) < DRIFT_MAX_OFFSET;
+    // Near the centre we measured, or near the stick's nominal centre. The second one also
+    // repairs a centre measured while someone was touching the stick, for instance while
+    // holding the sync button during pairing.
+    const bool nearCentre = (abs(rawX - _centreX) < DRIFT_MAX_OFFSET &&
+                             abs(rawY - _centreY) < DRIFT_MAX_OFFSET) ||
+                            (abs(rawX) < DRIFT_NOMINAL_OFFSET && abs(rawY) < DRIFT_NOMINAL_OFFSET);
     const bool still = abs(rawX - _stillX) <= DRIFT_STILL_NOISE &&
                        abs(rawY - _stillY) <= DRIFT_STILL_NOISE;
     if (!nearCentre || !still)
@@ -493,6 +521,7 @@ private:
   int16_t  _stillY = 0;
   uint32_t _stillSince = 0;
   static const int16_t  DRIFT_MAX_OFFSET  = 250;   // raw, about 25% of the stick range
+  static const int16_t  DRIFT_NOMINAL_OFFSET = 400; // raw, from 2048; real rest points seen: up to ~310
   static const int16_t  DRIFT_STILL_NOISE = 12;    // raw jitter of a stick nobody touches
   static const uint16_t DRIFT_STILL_MS    = 1500;
   bool     _ledOuter = false;
