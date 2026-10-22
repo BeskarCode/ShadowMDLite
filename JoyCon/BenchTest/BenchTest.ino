@@ -58,6 +58,10 @@ PS3NavController navDome(&Btd, "NAV-DOME", LED2);
 #if TEST_JOYCON
 JoyConController joyFoot(&Btd, JOYCON_LEFT,  "JOY-L", PAIR_NEW_DEVICE);
 JoyConController joyDome(&Btd, JOYCON_RIGHT, "JOY-R", PAIR_NEW_DEVICE);
+
+// Which controller is driving what, after routing. Starts in creation order.
+DroidController* footSlot = &joyFoot;
+DroidController* domeSlot = &joyDome;
 #endif
 
 // Same dead zones as the main sketch, converted to the normalised scale.
@@ -117,6 +121,15 @@ void loop()
   joyFoot.update();
   joyDome.update();
 
+  // Same routing the droid sketches use: left half to the feet, right half to the dome.
+  if (routeBySlot(footSlot, domeSlot))
+  {
+    Serial.print(F("ROUTED: feet <- "));
+    Serial.print(footSlot->name());
+    Serial.print(F(", dome <- "));
+    Serial.println(domeSlot->name());
+  }
+
   // The library leaves pairing mode as soon as one controller connects, and also gives up
   // after a few empty inquiries. While pairing, keep re-arming it until both are in.
   // Send 'p' over serial to pair a Joy-Con without re-flashing.
@@ -152,14 +165,18 @@ void loop()
     if (++n >= 4) { n = 0; _spiStep = 0; }
   }
 
+  // The library can only pair while nothing is connected, and while it searches it does not
+  // accept normal reconnections. So pairing ends as soon as a Joy-Con connects, and is only
+  // re-armed (the search gives up after a few tries) while none is connected.
+  const bool anyConnected = joyFoot.isConnected() || joyDome.isConnected();
+  if (anyConnected) _pairRequested = false;
   static uint32_t _lastPairArm = 0;
-  if ((PAIR_NEW_DEVICE || _pairRequested) && !Btd.pairWithHIDDevice &&
-      !(joyFoot.isConnected() && joyDome.isConnected()) &&
+  if ((PAIR_NEW_DEVICE || _pairRequested) && !anyConnected && !Btd.pairWithHIDDevice &&
       millis() - _lastPairArm > 15000)
   {
     _lastPairArm = millis();
     Btd.pairWithHID();
-    Serial.println(F("PAIRING re-armed: hold the sync button on the other Joy-Con."));
+    Serial.println(F("PAIRING re-armed: hold the sync button on the Joy-Con."));
   }
 #endif
 
@@ -178,8 +195,10 @@ void loop()
 #endif
 
 #if TEST_JOYCON
-  reportJoyCon(joyFoot, footDeadZone);
-  reportJoyCon(joyDome, domeDeadZone);
+  Serial.print(F("FEET -> "));
+  reportJoyCon(*(JoyConController*)footSlot, footDeadZone);
+  Serial.print(F("DOME -> "));
+  reportJoyCon(*(JoyConController*)domeSlot, domeDeadZone);
 
   // Edge detection check: once per press, never repeatedly.
   if (joyFoot.clicked(DB_A))   Serial.println(F("  [click] JOY-L A"));

@@ -382,6 +382,13 @@ public:
 
   JoyConSide side() const { return _side; }
 
+  // Left half drives the feet, right half the dome, whichever slot it connected into.
+  DroidSlot preferredSlot() const override
+  {
+    if (!_sideKnown || !isConnected()) return SLOT_ANY;
+    return _side == JOYCON_LEFT ? SLOT_FOOT : SLOT_DOME;
+  }
+
   // ---- extras a Nav cannot do ------------------------------------------------------------
 
   // 0 to 4, where 0 is critical. Worth printing at startup and before an event.

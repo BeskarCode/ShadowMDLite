@@ -40,20 +40,29 @@ public:
 
   void begin() { _impl->begin(); }
 
-  // Call once per loop, right after Usb.Task(). This is the ONE line the main loop gains.
+  // Call once per loop, right after Usb.Task(), for a pad on its own.
   void update()
   {
     _impl->update();
-    const bool now = _impl->isConnected();
+    refresh();
+  }
 
-    if (now && !PS3NavigationConnected && _onInit)
-      _onInit();                       // same moment PS3BT would have fired attachOnInit
-
-    PS3NavigationConnected = now;
-
-    // Shadow checks "Navigation or full DualShock". Only a real PS3BT can answer the
-    // second half, and on anything else it is simply false.
-    PS3Connected = _nav ? _nav->raw()->PS3Connected : false;
+  // Call once per loop, right after Usb.Task(), for the foot and dome pads together.
+  // Besides updating both, it puts each controller where it belongs: with Joy-Cons, the
+  // left half always drives the feet and the right half the dome, whichever woke up first.
+  // If only the right one is connected it goes to the dome and the feet stay still.
+  static void updatePair(DroidPad& foot, DroidPad& dome)
+  {
+    foot._impl->update();
+    dome._impl->update();
+    if (routeBySlot(foot._impl, dome._impl))
+    {
+      PS3NavController* t = foot._nav;
+      foot._nav = dome._nav;
+      dome._nav = t;
+    }
+    foot.refresh();
+    dome.refresh();
   }
 
   // ---- the old API, as the sketch knows it --------------------------------------------
@@ -98,6 +107,21 @@ public:
   DroidController* controller() { return _impl; }
 
 private:
+  // Connection state and the attachOnInit callback, from whichever controller is in here.
+  void refresh()
+  {
+    const bool now = _impl->isConnected();
+
+    if (now && !PS3NavigationConnected && _onInit)
+      _onInit();                       // same moment PS3BT would have fired attachOnInit
+
+    PS3NavigationConnected = now;
+
+    // Shadow checks "Navigation or full DualShock". Only a real PS3BT can answer the
+    // second half, and on anything else it is simply false.
+    PS3Connected = _nav ? _nav->raw()->PS3Connected : false;
+  }
+
   static uint16_t role(ButtonEnum b)
   {
     switch ((uint8_t)b)

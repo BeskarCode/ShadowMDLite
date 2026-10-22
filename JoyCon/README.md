@@ -8,7 +8,7 @@ Everything here is about replacing the PS3 Move Navigation controller, which Son
 
 **The bench test passes with two real Joy-Cons connected at once**: both sticks reach full scale, all nine buttons on each half read correctly, and the link lag stays under 25 ms. **Nothing has been driven on a droid yet.** Run the bench test first, with the droid powered down, and do not take any of this to an event until you have driven it in your workshop.
 
-One thing is still open in the sketches that drive the droid (ShadowMD Lite and the Shadow MD fork): the foot and dome controllers are assigned by connection order, so if the right Joy-Con connects first it lands in the foot slot. The bench test already names each half correctly; the sketches do not route by side yet. Until they do, wake the left Joy-Con first.
+**The order does not matter.** Whichever Joy-Con wakes up first, the left half always drives the foot and the right half the dome. If only the right one is connected, it goes to the dome and the foot stays still. Tested on the bench with the right half connecting first.
 
 ## Which folder do I open?
 
@@ -93,7 +93,9 @@ Plug the Bluetooth dongle in before powering up the controllers. The library rea
 
 **It does not come back to the same centre.** Joy-Con sticks are known for drift: let go after a full push and the stick often rests somewhere else. On the test unit it settled about 15% off centre, enough to make the feet creep. So the centre keeps adjusting: when the stick sits within 25% of the centre and does not move at all for 1.5 seconds, that spot becomes the new centre. A thumb on the stick is never that still, so it does not fight you while you drive.
 
-**Which half is which.** Each half reports the other half's stick as all zeros, so `JoyConController` works out on connection whether it got a left or a right Joy-Con, and uses that side's stick and button map whatever slot it was created for.
+**Which half is which.** Each half reports the other half's stick as all zeros, so `JoyConController` works out on connection whether it got a left or a right Joy-Con, and uses that side's stick and button map whatever slot it was created for. `routeBySlot()` in `DroidController.h` then swaps the foot and dome slots when needed, and `DroidPad::updatePair()` calls it every loop. A PS3 Nav does not know which one it is, so with Navs nothing changes.
+
+**Using a Joy-Con on a Switch breaks the link to the droid.** A Joy-Con keeps two pairing records in its flash. A new pairing goes into the second one and the old second one moves to the first. If one of the two records points to a Switch, pressing a button no longer reconnects to the droid. Pairing it with the droid **twice** puts the dongle in both records and fixes it.
 
 **Full scale is smaller than the spec says.** The axes are 12 bit, but a real Joy-Con stick reaches about ±1100 from centre, not ±2048. The default range is 1000, so a full push reads full scale.
 

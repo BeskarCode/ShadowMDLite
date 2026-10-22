@@ -45,6 +45,15 @@ enum DroidButton : uint16_t
 // to avoid throwing away resolution on controllers that have it.
 static const int16_t DC_STICK_MAX = 512;
 
+// Which job a controller wants. A Joy-Con knows which half it is, so it can ask for the
+// feet or the dome. A Nav looks the same either way and stays in the slot it was given.
+enum DroidSlot : uint8_t
+{
+  SLOT_ANY  = 0,
+  SLOT_FOOT = 1,
+  SLOT_DOME = 2
+};
+
 class DroidController
 {
 public:
@@ -114,6 +123,9 @@ public:
   // Short human readable name, for console output.
   virtual const char* name() const = 0;
 
+  // The slot this controller belongs in, once it knows. SLOT_ANY keeps it where it is.
+  virtual DroidSlot preferredSlot() const { return SLOT_ANY; }
+
 protected:
   // Implementations fill these in during update() and call rememberPrevious() first.
   void rememberPrevious() { _prevButtons = _buttons; }
@@ -135,5 +147,24 @@ private:
   uint16_t _buttons = 0;
   uint16_t _prevButtons = 0;
 };
+
+// Put each controller in the slot it asks for, whatever order they connected in. Call it
+// after both have been updated. Returns true when it swapped them.
+//
+// It only swaps when that does not take a controller out of a slot it wants, so two halves
+// of the same side stay where they are rather than swapping back and forth every loop.
+inline bool routeBySlot(DroidController*& foot, DroidController*& dome)
+{
+  const DroidSlot f = foot->preferredSlot();
+  const DroidSlot d = dome->preferredSlot();
+  if ((f == SLOT_DOME && d != SLOT_DOME) || (d == SLOT_FOOT && f != SLOT_FOOT))
+  {
+    DroidController* t = foot;
+    foot = dome;
+    dome = t;
+    return true;
+  }
+  return false;
+}
 
 #endif // DROID_CONTROLLER_H
