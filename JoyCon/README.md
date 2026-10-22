@@ -6,7 +6,9 @@ Everything here is about replacing the PS3 Move Navigation controller, which Son
 
 ## Status
 
-Everything compiles. **Nothing has been tested on a droid yet.** Run the bench test first, with the droid powered down, and do not take any of this to an event until you have driven it in your workshop.
+**The bench test passes with two real Joy-Cons connected at once**: both sticks reach full scale, all nine buttons on each half read correctly, and the link lag stays under 25 ms. **Nothing has been driven on a droid yet.** Run the bench test first, with the droid powered down, and do not take any of this to an event until you have driven it in your workshop.
+
+One thing is still open in the sketches that drive the droid (ShadowMD Lite and the Shadow MD fork): the foot and dome controllers are assigned by connection order, so if the right Joy-Con connects first it lands in the foot slot. The bench test already names each half correctly; the sketches do not route by side yet. Until they do, wake the left Joy-Con first.
 
 ## Which folder do I open?
 
@@ -64,17 +66,36 @@ In ShadowMD Lite there is one more thing to know: of the cross controller `dome 
 
 ## Pairing a Joy-Con
 
-1. Set the pairing flag to `true`: `PAIR_NEW_DEVICE` in `BenchTest.ino`, or `JOYCON_PAIRING_MODE` in `ControllerConfig.h`.
-2. Upload, then hold the small sync button on the Joy-Con rail until its lights run back and forth.
-3. Once it connects, set the flag back to `false` and upload again. From then on it reconnects by itself.
+**Pair one Joy-Con at a time.** The library can only pair while no other controller is connected; once one is in, it stops looking. Reconnecting afterwards works fine with both at once.
+
+With the bench test, no re-flashing is needed: open the serial monitor at 115200, send `p`, and hold the small sync button on the Joy-Con rail until its lights run back and forth. Then reset the Mega and do the other half the same way.
+
+With ShadowMD Lite or the Shadow MD fork:
+
+1. Set `JOYCON_PAIRING_MODE` to `true` in `ControllerConfig.h`.
+2. Upload, then hold the sync button on one Joy-Con until it connects.
+3. Reset the Mega and pair the other one.
+4. Set the flag back to `false` and upload again. From then on they reconnect by themselves.
+
+**Reconnecting.** Press any button (minus or plus is a good choice) and the Joy-Con calls the dongle back. After the link drops, for instance when the Mega resets, wait about ten seconds before pressing: a Joy-Con that is still shutting down ignores the button.
+
+When a Joy-Con connects, its player LEDs alternate between the outer pair and the inner pair for two seconds, then settle on LED 1 for the left half and LED 2 for the right. If you do not see that, it did not connect.
+
+The bench test also answers `r`: it reads the pairing record each connected Joy-Con keeps in its flash (`0x2000` and `0x2026`) and prints the host address stored there, which should be your dongle's.
 
 Plug the Bluetooth dongle in before powering up the controllers. The library reads the dongle's address first.
 
-## Two Joy-Con details worth knowing
+## Joy-Con details worth knowing
 
-**It boots in the wrong mode.** A Joy-Con starts out sending report `0x3F`, "simple HID mode", where the stick is only an 8 direction hat, not an analog axis. Useless for driving. The library's parser spots that report and immediately asks for the full `0x30` report with real 12 bit axes.
+**It boots in the wrong mode.** A Joy-Con starts out sending report `0x3F`, "simple HID mode", where the stick is only an 8 direction hat, not an analog axis. Useless for driving. In simple mode it only sends a report when a button changes, and the library only sends its own commands right after it receives a report, so a Joy-Con nobody touches never gets asked to switch. `JoyConController` therefore asks for the full `0x30` report itself, every 250 ms, until full reports start arriving.
 
-**The centre is not where you think.** Factory stick calibration lives in the controller's own SPI flash and the library does not expose it, so `JoyConController` measures the centre itself on every connection, by averaging the stick for about half a second. Leave it alone while it does that. It also soaks up the drift these sticks are known for.
+**The centre is not where you think.** Factory stick calibration lives in the controller's own SPI flash and the library does not expose it, so `JoyConController` measures the centre itself on every connection, by averaging the first 30 full reports, about half a second. Leave it alone while it does that.
+
+**It does not come back to the same centre.** Joy-Con sticks are known for drift: let go after a full push and the stick often rests somewhere else. On the test unit it settled about 15% off centre, enough to make the feet creep. So the centre keeps adjusting: when the stick sits within 25% of the centre and does not move at all for 1.5 seconds, that spot becomes the new centre. A thumb on the stick is never that still, so it does not fight you while you drive.
+
+**Which half is which.** Each half reports the other half's stick as all zeros, so `JoyConController` works out on connection whether it got a left or a right Joy-Con, and uses that side's stick and button map whatever slot it was created for.
+
+**Full scale is smaller than the spec says.** The axes are 12 bit, but a real Joy-Con stick reaches about ±1100 from centre, not ±2048. The default range is 1000, so a full push reads full scale.
 
 ## Credit
 

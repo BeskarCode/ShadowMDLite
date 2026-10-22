@@ -25,7 +25,7 @@ ShadowMD Lite can run with a single Nintendo Switch Joy-Con in each hand instead
 |---|---|---|
 | Before the controller layer, PS3 Nav | 49,660 | 4,463 (54%) |
 | PS3 Nav, older library | 50,160 | 4,551 (55%) |
-| Joy-Con, library 1.7.0 | 50,054 | 4,624 (56%) |
+| Joy-Con, library 1.7.0 | 51,268 | 4,718 (57%) |
 
 **Status:** everything compiles. **Nothing has been tested on a droid yet.** Run `JoyCon/BenchTest` first and drive it in your workshop before taking it to an event.
 

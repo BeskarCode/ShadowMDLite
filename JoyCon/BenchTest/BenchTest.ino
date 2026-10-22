@@ -116,9 +116,59 @@ void loop()
 #if TEST_JOYCON
   joyFoot.update();
   joyDome.update();
+
+  // The library leaves pairing mode as soon as one controller connects, and also gives up
+  // after a few empty inquiries. While pairing, keep re-arming it until both are in.
+  // Send 'p' over serial to pair a Joy-Con without re-flashing.
+  static bool _pairRequested = false;
+  // Send 'r' to dump the pairing info stored in each connected Joy-Con's flash.
+  static uint32_t _spiStep = 0;
+  if (Serial.available())
+  {
+    const char c = Serial.read();
+    if (c == 'p')
+    {
+      _pairRequested = true;
+      Btd.pairWithHID();
+      Serial.println(F("PAIRING requested over serial: hold the sync button now."));
+    }
+    else if (c == 'r')
+    {
+      _spiStep = millis() | 1;
+      Serial.println(F("Reading pairing info..."));
+    }
+  }
+  // One read at a time, spaced out, so each reply has room to arrive.
+  if (_spiStep && millis() - _spiStep > 300)
+  {
+    static uint8_t n = 0;
+    JoyConController* jc = (n / 2 == 0) ? &joyFoot : &joyDome;
+    if (jc->isConnected())
+    {
+      Serial.println(); Serial.print(jc->name()); Serial.print(' ');
+      jc->raw()->readSpi((n & 1) ? 0x2026 : 0x2000, 0x1D);
+    }
+    _spiStep = millis() | 1;
+    if (++n >= 4) { n = 0; _spiStep = 0; }
+  }
+
+  static uint32_t _lastPairArm = 0;
+  if ((PAIR_NEW_DEVICE || _pairRequested) && !Btd.pairWithHIDDevice &&
+      !(joyFoot.isConnected() && joyDome.isConnected()) &&
+      millis() - _lastPairArm > 15000)
+  {
+    _lastPairArm = millis();
+    Btd.pairWithHID();
+    Serial.println(F("PAIRING re-armed: hold the sync button on the other Joy-Con."));
+  }
 #endif
 
-  if (millis() - lastPrint < 500) return;
+  // Print every 500 ms, or at once when a button changes so short presses are not missed.
+  static uint32_t lastButtons = 0;
+  const uint32_t nowButtons = joyFoot.buttons() | ((uint32_t)joyDome.buttons() << 16);
+  const bool buttonsChanged = nowButtons != lastButtons;
+  lastButtons = nowButtons;
+  if (!buttonsChanged && millis() - lastPrint < 500) return;
   lastPrint = millis();
 
 #if TEST_PS3NAV
@@ -196,7 +246,15 @@ void reportJoyCon(JoyConController& c, int16_t deadZone)
   {
     Serial.print(F("        battery: "));
     Serial.print(c.batteryLevel());
-    Serial.println(F("/4"));
+    Serial.print(F("/4  raw L("));
+    Serial.print(c.raw()->getAnalogHat(LeftHatX));
+    Serial.print(F(","));
+    Serial.print(c.raw()->getAnalogHat(LeftHatY));
+    Serial.print(F(") R("));
+    Serial.print(c.raw()->getAnalogHat(RightHatX));
+    Serial.print(F(","));
+    Serial.print(c.raw()->getAnalogHat(RightHatY));
+    Serial.println(F(")"));
   }
 }
 #endif

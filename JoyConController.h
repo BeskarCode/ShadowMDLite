@@ -29,6 +29,66 @@
 #define JOYCON_CONTROLLER_H
 
 #include <SwitchProBT.h>
+
+// The library only sends its queued commands from inside Parse(), one per incoming report.
+// A freshly connected Joy-Con sits in simple mode (0x3F), which reports only on a button
+// change, so with nobody touching it the request for full mode (0x30) is never sent. This
+// lets the controller class send that request itself.
+class JoyConBT : public SwitchProBT
+{
+public:
+  JoyConBT(BTD* p, bool pair) : SwitchProBT(p, pair) {}
+
+  void requestFullReport()
+  {
+    const uint8_t arg = 0x30;         // full report
+    sendSubcommand(0x03, &arg, 1);    // set input report mode
+  }
+
+  // Read up to 0x1D bytes of the controller's SPI flash. The answer arrives later as a
+  // 0x21 report and is printed to Serial by ParseBTHIDData below.
+  void readSpi(uint16_t addr, uint8_t len)
+  {
+    const uint8_t arg[5] = { (uint8_t)addr, (uint8_t)(addr >> 8), 0, 0, len };
+    sendSubcommand(0x10, arg, sizeof(arg));
+  }
+
+protected:
+  virtual void ParseBTHIDData(uint8_t len, uint8_t *buf)
+  {
+    // 0x21 = subcommand reply. [13] ack, [14] subcommand, then its data.
+    if (buf[0] == 0x21 && len > 20 && buf[14] == 0x10)
+    {
+      Serial.print(F("SPI 0x"));
+      Serial.print(buf[15] | (buf[16] << 8), HEX);
+      Serial.print(F(":"));
+      for (uint8_t i = 0; i < buf[19] && 20 + i < len; i++)
+      {
+        Serial.print(' ');
+        if (buf[20 + i] < 0x10) Serial.print('0');
+        Serial.print(buf[20 + i], HEX);
+      }
+      Serial.println();
+    }
+    SwitchProBT::ParseBTHIDData(len, buf);
+  }
+
+private:
+  void sendSubcommand(uint8_t id, const uint8_t* data, uint8_t len)
+  {
+    uint8_t buf[11 + 8] = { 0 };
+    buf[0] = 0x01;                    // rumble + subcommand
+    buf[1] = _seq++ & 0x0F;
+    buf[2] = 0x00; buf[3] = 0x01; buf[4] = 0x40; buf[5] = 0x40;   // neutral rumble, left
+    buf[6] = 0x00; buf[7] = 0x01; buf[8] = 0x40; buf[9] = 0x40;   // neutral rumble, right
+    buf[10] = id;
+    if (len > 8) len = 8;
+    memcpy(&buf[11], data, len);
+    sendOutputReport(buf, 11 + len);
+  }
+
+  uint8_t _seq = 0;
+};
 #include "DroidController.h"
 
 enum JoyConSide { JOYCON_LEFT, JOYCON_RIGHT };
@@ -161,7 +221,9 @@ public:
     if (now && !_wasConnected)
     {
       recalibrate();                       // fresh connection, measure the centre again
-      _joy.setLedOn(_side == JOYCON_LEFT ? LED1 : LED2);
+      _gotFullReport = false;
+      _lastModeRequest = 0;
+      _sideKnown = false;
       _lastMessage = millis();
       _lastCounter = _joy.getMessageCounter();
     }
@@ -178,16 +240,64 @@ public:
     // the link is gone even though the stack has not noticed yet, which is exactly what
     // the droid watchdog needs to see.
     const uint16_t counter = _joy.getMessageCounter();
-    if (counter != _lastCounter)
+    const bool newReport = (counter != _lastCounter);
+    if (newReport)
     {
       _lastCounter = counter;
       _lastMessage = millis();
+      _gotFullReport = true;
+    }
+    else if (!_gotFullReport && millis() - _lastModeRequest > 250)
+    {
+      _lastModeRequest = millis();
+      _joy.requestFullReport();
     }
 
     // ---- stick ---------------------------------------------------------------------------
     // Only one stick is populated on a single Joy-Con. The parser already inverts Y so that
     // forward is positive; this layer wants forward negative, like the Nav reports it, so
     // it gets inverted back below.
+    // Which half connected to this slot depends on who reconnects first, not on the slot.
+    // A half reports the other half's stick as all zeros, which the parser turns into
+    // exactly (-2048, 2048), so the first full report tells us which one this is.
+    if (newReport && !_sideKnown)
+    {
+      _sideKnown = true;
+      const bool leftStickEmpty = _joy.getAnalogHat(LeftHatX) == -2048 &&
+                                  _joy.getAnalogHat(LeftHatY) ==  2048;
+      const JoyConSide detected = leftStickEmpty ? JOYCON_RIGHT : JOYCON_LEFT;
+      if (detected != _side)
+      {
+        _side = detected;
+        _map = (_side == JOYCON_LEFT) ? JOYCON_MAP_LEFT : JOYCON_MAP_RIGHT;
+      }
+      _ledAnimUntil = millis() + LED_ANIM_MS;   // "connected" signal, see below
+      _lastLedStep = 0;
+      recalibrate();                       // centre must be measured on the right stick
+      setStick(0, 0);
+      setButtons(0);
+      return;
+    }
+
+    // ---- connection signal -----------------------------------------------------------------
+    // For a couple of seconds after connecting, alternate the outer and inner player LEDs so
+    // you can see which Joy-Con just came up, then settle on its player LED.
+    if (_ledAnimUntil)
+    {
+      const uint32_t t = millis();
+      if ((int32_t)(t - _ledAnimUntil) >= 0)
+      {
+        _ledAnimUntil = 0;
+        _joy.setLedRaw(_side == JOYCON_LEFT ? 0x01 : 0x02);
+      }
+      else if (t - _lastLedStep >= 200)
+      {
+        _lastLedStep = t;
+        _ledOuter = !_ledOuter;
+        _joy.setLedRaw(_ledOuter ? 0x09 : 0x06);   // LED1+LED4, then LED2+LED3
+      }
+    }
+
     int16_t rawX, rawY;
     if (_side == JOYCON_LEFT)
     {
@@ -202,6 +312,10 @@ public:
 
     if (_calibrating)
     {
+      // Sample once per full report, not once per loop: loop() runs thousands of times a
+      // second, and until the first 0x30 report arrives the parser holds its 2048 defaults.
+      if (!newReport) { setStick(0, 0); }
+      else {
       _calSumX += rawX;
       _calSumY += rawY;
       if (++_calSamples >= CAL_SAMPLES)
@@ -211,9 +325,15 @@ public:
         _calibrating = false;
       }
       setStick(0, 0);       // report centred while measuring, never a stale value
+      }
     }
     else
     {
+      // Joy-Con sticks often do not spring back to where they started (drift). If the stick
+      // sits near the centre and does not move at all for a while, nobody is holding it:
+      // take that spot as the new centre. A thumb is never that still.
+      if (newReport) trackDrift(rawX, rawY);
+
       int16_t x = rawX - _centreX;
       int16_t y = rawY - _centreY;
 
@@ -243,7 +363,7 @@ public:
     setButtons(b);
   }
 
-  bool isConnected() const override { return const_cast<SwitchProBT&>(_joy).connected(); }
+  bool isConnected() const override { return const_cast<JoyConBT&>(_joy).connected(); }
 
   void disconnect() override { _joy.disconnect(); }
 
@@ -253,7 +373,14 @@ public:
     return (now >= _lastMessage) ? (now - _lastMessage) : 0;
   }
 
-  const char* name() const override { return _label; }
+  // Once connected, name the half that is actually there rather than the slot.
+  const char* name() const override
+  {
+    if (!_sideKnown) return _label;
+    return _side == JOYCON_LEFT ? "JOY-L" : "JOY-R";
+  }
+
+  JoyConSide side() const { return _side; }
 
   // ---- extras a Nav cannot do ------------------------------------------------------------
 
@@ -267,7 +394,7 @@ public:
   bool isCalibrating() const { return _calibrating; }
 
   // Escape hatch for anything this wrapper does not cover yet.
-  SwitchProBT* raw() { return &_joy; }
+  JoyConBT* raw() { return &_joy; }
 
 private:
   static const uint8_t CAL_SAMPLES = 30;   // about half a second at 60 Hz
@@ -278,6 +405,28 @@ private:
     return _joy.getButtonPress(b);
   }
 
+  void trackDrift(int16_t rawX, int16_t rawY)
+  {
+    const uint32_t now = millis();
+    const bool nearCentre = abs(rawX - _centreX) < DRIFT_MAX_OFFSET &&
+                            abs(rawY - _centreY) < DRIFT_MAX_OFFSET;
+    const bool still = abs(rawX - _stillX) <= DRIFT_STILL_NOISE &&
+                       abs(rawY - _stillY) <= DRIFT_STILL_NOISE;
+    if (!nearCentre || !still)
+    {
+      _stillX = rawX;
+      _stillY = rawY;
+      _stillSince = now;
+      return;
+    }
+    if (now - _stillSince >= DRIFT_STILL_MS)
+    {
+      _centreX = _stillX;
+      _centreY = _stillY;
+      _stillSince = now;
+    }
+  }
+
   int16_t scale(int32_t v) const
   {
     int32_t out = (v * (int32_t)DC_STICK_MAX) / _range;
@@ -286,12 +435,12 @@ private:
     return (int16_t)out;
   }
 
-  SwitchProBT  _joy;
+  JoyConBT     _joy;
   JoyConSide   _side;
   const char*  _label;
   JoyConMapping _map;
   JoyConGrip   _grip = JOYCON_UPRIGHT;
-  int16_t      _range = 1700;
+  int16_t      _range = 1000;
 
   bool     _wasConnected = false;
   uint32_t _lastMessage = 0;
@@ -301,6 +450,19 @@ private:
   uint8_t  _calSamples = 0;
   int32_t  _calSumX = 0;
   int32_t  _calSumY = 0;
+  bool     _gotFullReport = false;
+  bool     _sideKnown = false;
+  int16_t  _stillX = 0;
+  int16_t  _stillY = 0;
+  uint32_t _stillSince = 0;
+  static const int16_t  DRIFT_MAX_OFFSET  = 250;   // raw, about 25% of the stick range
+  static const int16_t  DRIFT_STILL_NOISE = 12;    // raw jitter of a stick nobody touches
+  static const uint16_t DRIFT_STILL_MS    = 1500;
+  bool     _ledOuter = false;
+  uint32_t _ledAnimUntil = 0;
+  uint32_t _lastLedStep = 0;
+  static const uint16_t LED_ANIM_MS = 2000;
+  uint32_t _lastModeRequest = 0;
   int16_t  _centreX = 0;
   int16_t  _centreY = 0;
 };
