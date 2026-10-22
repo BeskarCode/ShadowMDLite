@@ -46,18 +46,37 @@ public:
   }
 
   // Read up to 0x1D bytes of the controller's SPI flash. The answer arrives later as a
-  // 0x21 report and is printed to Serial by ParseBTHIDData below.
+  // 0x21 report; collect it with spiReplyReady().
   void readSpi(uint16_t addr, uint8_t len)
   {
     const uint8_t arg[5] = { (uint8_t)addr, (uint8_t)(addr >> 8), 0, 0, len };
+    _spiReady = false;
     sendSubcommand(0x10, arg, sizeof(arg));
   }
+
+  // True once, after the reply to readSpi(addr, ...) arrived. Copies its first 10 bytes.
+  bool spiReplyReady(uint16_t addr, uint8_t out[10])
+  {
+    if (!_spiReady || _spiAddr != addr) return false;
+    memcpy(out, _spiData, 10);
+    _spiReady = false;
+    return true;
+  }
+
+  // Print every SPI reply to Serial, for the bench test.
+  bool spiEcho = false;
 
 protected:
   virtual void ParseBTHIDData(uint8_t len, uint8_t *buf)
   {
     // 0x21 = subcommand reply. [13] ack, [14] subcommand, then its data.
-    if (buf[0] == 0x21 && len > 20 && buf[14] == 0x10)
+    if (buf[0] == 0x21 && len > 30 && buf[14] == 0x10)
+    {
+      _spiAddr = buf[15] | (buf[16] << 8);
+      memcpy(_spiData, &buf[20], 10);
+      _spiReady = true;
+    }
+    if (spiEcho && buf[0] == 0x21 && len > 20 && buf[14] == 0x10)
     {
       Serial.print(F("SPI 0x"));
       Serial.print(buf[15] | (buf[16] << 8), HEX);
@@ -87,7 +106,10 @@ private:
     sendOutputReport(buf, 11 + len);
   }
 
-  uint8_t _seq = 0;
+  uint8_t  _seq = 0;
+  bool     _spiReady = false;
+  uint16_t _spiAddr = 0;
+  uint8_t  _spiData[10];
 };
 #include "DroidController.h"
 
@@ -288,7 +310,7 @@ public:
       if ((int32_t)(t - _ledAnimUntil) >= 0)
       {
         _ledAnimUntil = 0;
-        _joy.setLedRaw(_side == JOYCON_LEFT ? 0x01 : 0x02);
+        _joy.setLedRaw(_waiting ? 0xF0 : playerLed());
       }
       else if (t - _lastLedStep >= 200)
       {
@@ -398,6 +420,14 @@ public:
   // mode, which on a Nav you can only tell by listening to the droid.
   void buzz(bool on) { _joy.setRumble(on, on); }
 
+  // While pairing: flash all four player LEDs, so the connected half shows the droid is
+  // waiting for the other one. Off: back to its player LED.
+  void setWaiting(bool on)
+  {
+    _waiting = on;
+    if (isConnected() && !_ledAnimUntil) _joy.setLedRaw(on ? 0xF0 : playerLed());
+  }
+
   bool isCalibrating() const { return _calibrating; }
 
   // Escape hatch for anything this wrapper does not cover yet.
@@ -467,6 +497,8 @@ private:
   static const uint16_t DRIFT_STILL_MS    = 1500;
   bool     _ledOuter = false;
   uint32_t _ledAnimUntil = 0;
+  bool     _waiting = false;
+  uint8_t  playerLed() const { return _side == JOYCON_LEFT ? 0x01 : 0x02; }
   uint32_t _lastLedStep = 0;
   static const uint16_t LED_ANIM_MS = 2000;
   uint32_t _lastModeRequest = 0;

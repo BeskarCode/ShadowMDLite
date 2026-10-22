@@ -27,10 +27,19 @@
 
 // --- Joy-Con options, ignored unless USE_JOYCON is selected -----------------------------
 
-// Set to true the first time, to pair a new Joy-Con: upload, then hold the small sync
-// button on the Joy-Con rail until the lights run. Set it back to false and upload again,
-// and from then on it reconnects by itself.
+// Pairing needs no change here. On the first boot the droid pairs by itself: hold the
+// small sync button on the left Joy-Con, then on the right one. To pair again later, hold
+// Minus + Capture (left) or Plus + Home (right) for 5 seconds, or reset the Mega three
+// times in a row, or send JOYPAIR from the web console. true forces pairing on every boot.
 #define JOYCON_PAIRING_MODE  false
+
+// R2 sounds played during pairing, as MarcDuino commands. Change them to suit your sound
+// card: "$51" is bank 5, sound 1.
+#define JOYCON_SOUND_STARTED  "$51"   // pairing mode on: hold sync on a Joy-Con
+#define JOYCON_SOUND_PAIRED   "$31"   // one paired, now the other one
+#define JOYCON_SOUND_DONE     "$32"   // both paired
+#define JOYCON_SOUND_TIMEOUT  "$41"   // gave up after 60 seconds
+#define JOYCON_SOUND_AGAIN    "$21"   // that Joy-Con still remembers a Switch: hold sync again
 
 // How you hold it. JOYCON_UPRIGHT is the Nav-like grip, stick at the top, rail against your
 // palm. JOYCON_SIDEWAYS turns the stick axes 90 degrees for the mini controller grip.
@@ -38,7 +47,7 @@
 
 // Raw stick deflection treated as full scale. Lower it if the droid reaches full speed
 // before the stick is all the way over, raise it if it never gets there.
-#define JOYCON_STICK_RANGE   1700
+#define JOYCON_STICK_RANGE   1000
 
 // ---------------------------------------------------------------------------------------
 // Joy-Con button map, for reference. See CheatSheet_JoyCon.html for the printable version.

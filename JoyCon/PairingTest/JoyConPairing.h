@@ -103,4 +103,239 @@ inline bool jcpHostRecordsMatch(const uint8_t rec2000[10], const uint8_t rec2026
   return true;
 }
 
+// ---- the pairing session --------------------------------------------------------------
+#ifndef JOYCON_PAIRING_LOGIC_ONLY
+
+#include <EEPROM.h>
+#include "JoyConController.h"
+
+enum JoyConPairEvent : uint8_t
+{
+  JCP_STARTED,           // pairing mode on: hold sync on a Joy-Con
+  JCP_PAIRED_ONE,        // one Joy-Con paired, the other one is still missing
+  JCP_DONE,              // both halves paired, back to normal
+  JCP_TIMEOUT,           // 60 s without finishing, back to normal
+  JCP_HOLD_SYNC_AGAIN    // this Joy-Con still remembers another host: hold sync again
+};
+
+class JoyConPairing
+{
+public:
+  JoyConPairing(BTD* btd, JoyConController* a, JoyConController* b) : _btd(btd)
+  {
+    _jc[0] = a;
+    _jc[1] = b;
+  }
+
+  // Call once in setup(), after the controllers' begin(). force = JOYCON_PAIRING_MODE.
+  void begin(void (*onEvent)(JoyConPairEvent), bool force = false)
+  {
+    _onEvent = onEvent;
+    pinMode(LED_BUILTIN, OUTPUT);
+    digitalWrite(LED_BUILTIN, LOW);
+
+    EEPROM.get(JOYCON_EEPROM_ADDR, _rec);
+    if (!_rec.valid()) { _rec.magic = JcpRecord::MAGIC; _rec.sides = 0; _rec.boots = 0; }
+    const bool triple = jcpTripleReset(_rec.boots);
+    EEPROM.put(JOYCON_EEPROM_ADDR, _rec);
+
+    if (triple || !_rec.complete() || force) request();
+  }
+
+  // Call every loop, right after DroidPad::updatePair().
+  void update()
+  {
+    // Library quirk (USB Host Shield 1.7.0): l2capConnectionClaimed is only cleared when an
+    // incoming connection completes. Pairing is an outgoing connection, so with one Joy-Con
+    // already connected no free instance would open the HID channels for the new one.
+    if (_btd->connectToHIDDevice && _btd->l2capConnectionClaimed)
+      _btd->l2capConnectionClaimed = false;
+
+    const uint32_t now = millis();
+
+    // Running for a while: this boot was not part of a triple reset.
+    if (!_bootsCleared && now > JOYCON_TRIPLE_RESET_WINDOW_MS)
+    {
+      _bootsCleared = true;
+      if (_rec.boots) { _rec.boots = 0; EEPROM.put(JOYCON_EEPROM_ADDR, _rec); }
+    }
+
+    updateBuzz(now);
+
+    if (!_active) { checkCombos(now); return; }
+
+    digitalWrite(LED_BUILTIN, (now / 250) & 1);   // 2 Hz while pairing
+
+    // The library gives up searching after a while, and stops after each pairing.
+    if (!_btd->pairWithHIDDevice && _verify < 0 && now - _lastArm > JOYCON_PAIR_REARM_MS)
+    {
+      _lastArm = now;
+      _btd->pairWithHID();
+    }
+
+    if (_verify >= 0) { verifyStep(now); return; }
+
+    for (uint8_t i = 0; i < 2; i++)
+    {
+      if (_jc[i]->isConnected() && !_known[i]) { startVerify(i, now); return; }
+      if (!_jc[i]->isConnected()) _known[i] = false;
+    }
+
+    if (now - _start > JOYCON_PAIR_TIMEOUT_MS) end(JCP_TIMEOUT);
+  }
+
+  // Start a pairing session (JOYPAIR command, combo, or from begin()).
+  void request()
+  {
+    if (_active) return;
+    _active = true;
+    _start = _lastArm = millis();
+    _verify = -1;
+    for (uint8_t i = 0; i < 2; i++)
+    {
+      _known[i] = _jc[i]->isConnected();    // already here: not a new pairing
+      _hold[i].reset();
+      _jc[i]->setWaiting(true);
+    }
+    _btd->pairWithHID();
+    if (_onEvent) _onEvent(JCP_STARTED);
+  }
+
+  bool active() const { return _active; }
+
+private:
+  void end(JoyConPairEvent ev)
+  {
+    _active = false;
+    _verify = -1;
+    // Stop searching and send the library back to waiting for reconnections. hci_state is
+    // private, but pairWithHID() resets it to "check device service", which falls straight
+    // through to scanning when pairWithHIDDevice is false.
+    _btd->hci_inquiry_cancel();
+    _btd->pairWithHID();
+    _btd->pairWithHIDDevice = false;
+    for (uint8_t i = 0; i < 2; i++) _jc[i]->setWaiting(false);
+    digitalWrite(LED_BUILTIN, LOW);
+    if (_onEvent) _onEvent(ev);
+  }
+
+  // A Joy-Con connected during the session. Before counting it, check that both of its
+  // host records point to this dongle (see jcpHostRecordsMatch).
+  void startVerify(uint8_t i, uint32_t now)
+  {
+    _verify = (int8_t)i;
+    _vStep = 0;
+    _vSince = now;
+  }
+
+  void verifyStep(uint32_t now)
+  {
+    JoyConController* jc = _jc[_verify];
+    if (!jc->isConnected()) { _verify = -1; return; }
+
+    switch (_vStep)
+    {
+      case 0:   // wait until it sends full reports and knows its side
+        if (jc->preferredSlot() == SLOT_ANY) { if (now - _vSince > 3000) accept(now); return; }
+        jc->raw()->readSpi(0x2000, 10);
+        _vStep = 1; _vSince = now;
+        return;
+      case 1:
+        if (jc->raw()->spiReplyReady(0x2000, _r0))
+        {
+          jc->raw()->readSpi(0x2026, 10);
+          _vStep = 2; _vSince = now;
+        }
+        else if (now - _vSince > 1500) accept(now);   // no answer: do not block the user
+        return;
+      case 2:
+        if (jc->raw()->spiReplyReady(0x2026, _r1))
+        {
+          if (jcpHostRecordsMatch(_r0, _r1, _btd->my_bdaddr)) accept(now);
+          else reject(now);
+        }
+        else if (now - _vSince > 1500) accept(now);
+        return;
+    }
+  }
+
+  void accept(uint32_t now)
+  {
+    const uint8_t i = (uint8_t)_verify;
+    _verify = -1;
+    _known[i] = true;
+    const DroidSlot slot = _jc[i]->preferredSlot();
+    if (slot == SLOT_FOOT) _rec.sides |= JcpRecord::LEFT;
+    if (slot == SLOT_DOME) _rec.sides |= JcpRecord::RIGHT;
+    EEPROM.put(JOYCON_EEPROM_ADDR, _rec);
+    buzz(i, 300, now);
+
+    if (_rec.complete()) end(JCP_DONE);
+    else
+    {
+      _start = now;                      // a fresh minute for the other half
+      if (_onEvent) _onEvent(JCP_PAIRED_ONE);
+    }
+  }
+
+  void reject(uint32_t now)
+  {
+    const uint8_t i = (uint8_t)_verify;
+    _verify = -1;
+    _known[i] = false;
+    _jc[i]->disconnect();
+    _start = now;                        // give the user time to hold sync again
+    if (_onEvent) _onEvent(JCP_HOLD_SYNC_AGAIN);
+  }
+
+  // Hold Minus + Capture (left) or Plus + Home (right) for 5 s, stick centred, to pair.
+  void checkCombos(uint32_t now)
+  {
+    for (uint8_t i = 0; i < 2; i++)
+    {
+      JoyConController* jc = _jc[i];
+      const bool held = jc->isConnected() && jc->pressed(DB_A | DB_B) &&
+                        abs(jc->x()) < DC_STICK_MAX / 8 && abs(jc->y()) < DC_STICK_MAX / 8;
+      const uint8_t before = _hold[i].ticks();
+      if (_hold[i].update(held, now)) { buzz(i, 500, now); request(); return; }
+      if (_hold[i].ticks() > before) buzz(i, 120, now);   // one tick per second held
+    }
+  }
+
+  void buzz(uint8_t i, uint16_t ms, uint32_t now)
+  {
+    _jc[i]->buzz(true);
+    _buzzUntil[i] = now + ms;
+  }
+
+  void updateBuzz(uint32_t now)
+  {
+    for (uint8_t i = 0; i < 2; i++)
+      if (_buzzUntil[i] && (int32_t)(now - _buzzUntil[i]) >= 0)
+      {
+        _jc[i]->buzz(false);
+        _buzzUntil[i] = 0;
+      }
+  }
+
+  BTD*              _btd;
+  JoyConController* _jc[2];
+  void            (*_onEvent)(JoyConPairEvent) = NULL;
+  JcpRecord         _rec = { JcpRecord::MAGIC, 0, 0 };
+  HoldTimer         _hold[2];
+  bool              _known[2] = { false, false };
+  uint32_t          _buzzUntil[2] = { 0, 0 };
+  bool              _active = false;
+  bool              _bootsCleared = false;
+  uint32_t          _start = 0;
+  uint32_t          _lastArm = 0;
+  int8_t            _verify = -1;        // index of the Joy-Con being checked, -1 none
+  uint8_t           _vStep = 0;
+  uint32_t          _vSince = 0;
+  uint8_t           _r0[10];
+  uint8_t           _r1[10];
+};
+
+#endif // JOYCON_PAIRING_LOGIC_ONLY
+
 #endif // JOYCON_PAIRING_H
