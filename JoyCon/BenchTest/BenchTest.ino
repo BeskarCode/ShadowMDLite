@@ -113,6 +113,14 @@ void loop()
 {
   Usb.Task();
 
+  // Library quirk (USB Host Shield 1.7.0): l2capConnectionClaimed is only cleared when an
+  // incoming connection completes. Pairing is an outgoing connection, so once one Joy-Con
+  // is connected the flag stays set and no free instance opens the HID channels for the
+  // newly paired one. Clearing it here lets the second Joy-Con pair while the first stays
+  // connected. connectToHIDDevice is only true right after a pairing has authenticated.
+  if (Btd.connectToHIDDevice && Btd.l2capConnectionClaimed)
+    Btd.l2capConnectionClaimed = false;
+
 #if TEST_PS3NAV
   navFoot.update();
   navDome.update();
