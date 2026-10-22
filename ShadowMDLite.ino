@@ -616,6 +616,29 @@ BTD Btd(&Usb);
 DroidPad* PS3NavFoot=&footPad;
 DroidPad* PS3NavDome=&domePad;
 
+#ifdef USE_JOYCON
+  #include "JoyConPairing.h"
+  // Pairing without editing or re-uploading: first boot, Minus+Capture / Plus+Home held
+  // for 5 s, three resets in a row, or JOYPAIR from the web console. See JoyConPairing.h.
+  JoyConPairing joyPairing(&Btd, &joyFootImpl, &joyDomeImpl);
+
+  // What the droid says during pairing: an R2 sound and a line on the console.
+  void onJoyConPairEvent(JoyConPairEvent e)
+  {
+    const char* sound = JOYCON_SOUND_STARTED;
+    switch (e)
+    {
+      case JCP_STARTED:         sound = JOYCON_SOUND_STARTED; Serial.println(F("JOYPAIR started: hold sync on a Joy-Con")); break;
+      case JCP_PAIRED_ONE:      sound = JOYCON_SOUND_PAIRED;  Serial.println(F("JOYPAIR paired one, now the other")); break;
+      case JCP_DONE:            sound = JOYCON_SOUND_DONE;    Serial.println(F("JOYPAIR done")); break;
+      case JCP_TIMEOUT:         sound = JOYCON_SOUND_TIMEOUT; Serial.println(F("JOYPAIR timed out")); break;
+      case JCP_HOLD_SYNC_AGAIN: sound = JOYCON_SOUND_AGAIN;   Serial.println(F("JOYPAIR hold sync again on that Joy-Con")); break;
+    }
+    Serial1.print(sound);
+    Serial1.print('\r');
+  }
+#endif
+
 #ifdef CANBUS
 MCP_CAN CAN0(SS);   // Set CS to pin SS
 #endif
@@ -718,6 +741,13 @@ void setup()
     Serial.print(F("\r\nRegistering Controller Events... "));
     PS3NavFoot->begin();
     PS3NavDome->begin();
+    #ifdef USE_JOYCON
+      joyFootImpl.setStickRange(JOYCON_STICK_RANGE);
+      joyDomeImpl.setStickRange(JOYCON_STICK_RANGE);
+      joyFootImpl.setGrip(JOYCON_GRIP);
+      joyDomeImpl.setGrip(JOYCON_GRIP);
+      joyPairing.begin(onJoyConPairEvent, JOYCON_PAIRING_MODE);
+    #endif
     PS3NavFoot->attachOnInit(onInitPS3NavFoot); // onInitPS3NavFoot is called upon a new connection
     PS3NavDome->attachOnInit(onInitPS3NavDome); 
     Serial.print(F("done.\r\n"));
@@ -792,6 +822,17 @@ static void processPCSerialLine(const char* line)
     Serial.println(F("Use: S1:<COMANDO> or S3:<COMANDO>"));
     Serial.println(F("Also: MD:<mdFunc> (calls marcDuinoButtonPush(1, mdFunc))"));
     Serial.println(F("Example: S1::SE01"));
+    return;
+  }
+
+  if (!strcmp(p, "JOYPAIR") || !strcmp(p, "joypair"))
+  {
+    #ifdef USE_JOYCON
+      joyPairing.request();
+      Serial.println(F("OK JOYPAIR"));
+    #else
+      Serial.println(F("ERR JOYPAIR needs USE_JOYCON in ControllerConfig.h"));
+    #endif
     return;
   }
 
@@ -2503,7 +2544,13 @@ void onInitPS3NavFoot()
       output += btAddress;
     #endif
     
+    // Joy-Cons: only a Joy-Con paired during a pairing session can connect at all, so the
+    // pairing is the gate. The MAC lists hold PS3 Nav addresses and would drop every Joy-Con.
+    #ifdef USE_JOYCON
+    if (true)
+    #else
     if (btAddress == PS3ControllerFootMac || btAddress == PS3ControllerBackupFootMac)
+    #endif
     {
         
           #ifdef SHADOW_DEBUG
@@ -2542,7 +2589,13 @@ void onInitPS3NavDome()
     isSecondaryPS3NavigatonInitialized = true;
     badPS3Data = 0;
     
+    // Joy-Cons: only a Joy-Con paired during a pairing session can connect at all, so the
+    // pairing is the gate. The MAC lists hold PS3 Nav addresses and would drop every Joy-Con.
+    #ifdef USE_JOYCON
+    if (true)
+    #else
     if (btAddress == PS3ControllerDomeMAC || btAddress == PS3ControllerBackupDomeMAC)
+    #endif
     {
         
           #ifdef SHADOW_DEBUG
@@ -2847,6 +2900,17 @@ boolean readUSB()
      // Controller abstraction: refresh both controllers once per loop, right after Usb.Task().
      // With Joy-Cons this also puts the left half on the feet and the right on the dome.
      DroidPad::updatePair(*PS3NavFoot, *PS3NavDome);
+
+     #ifdef USE_JOYCON
+       // While pairing, the droid does not move and the controllers are not read.
+       joyPairing.update();
+       if (joyPairing.active())
+       {
+           if (!isFootMotorStopped) { ST->stop(); isFootMotorStopped = true; footDriveSpeed = 0; }
+           if (!isDomeMotorStopped) { SyR->stop(); isDomeMotorStopped = true; }
+           return false;
+       }
+     #endif
      
     //The more devices we have connected to the USB or BlueTooth, the more often Usb.Task need to be called to eliminate latency.
     if (PS3NavFoot->PS3NavigationConnected) 

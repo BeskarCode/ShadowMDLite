@@ -432,6 +432,7 @@
     <div class="row" style="margin-top: 0.75rem;">
       <button type="button" class="btn-primary" id="btnSend" disabled data-i18n="btnSend">Send</button>
       <button type="button" class="btn-ghost" id="btnClearLog" data-i18n="btnClearLog">Clear log</button>
+      <button type="button" class="btn-ghost need-serial" id="btnJoyPair" disabled data-i18n="btnJoyPair" data-i18n-title="titleJoyPair">Pair Joy-Con</button>
     </div>
     <div class="console-log-block">
       <strong style="font-size: 0.85rem; color: var(--muted);" data-i18n="receivedLabel">Received</strong>
@@ -1324,6 +1325,12 @@
       $("btnConnect").addEventListener("click", openPort);
       $("btnDisconnect").addEventListener("click", closePort);
       $("btnSend").addEventListener("click", sendCommand);
+      // Joy-Con builds only: pairing mode for 60 s. Sent as is, without a routing prefix.
+      $("btnJoyPair").addEventListener("click", async () => {
+        if (!writer) return;
+        await writer.write("JOYPAIR\r\n");
+        appendLog("→ ", JSON.stringify("JOYPAIR\r\n"));
+      });
       $("cmd").addEventListener("input", autoSelectRouteFromCmdInput);
       $("btnClearLog").addEventListener("click", () => {
         logEl.textContent = "";
