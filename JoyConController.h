@@ -55,6 +55,15 @@ public:
     sendOutputReport(buf, sizeof(buf));
   }
 
+  // The link is gone but the library never noticed: BTD handles "HCI disconnected" without
+  // telling the services, so this instance would stay "connected" forever and refuse the
+  // Joy-Con when it reconnects. Drop the (possibly dead) link and free the instance.
+  void forget()
+  {
+    pBtd->hci_disconnect(hci_handle);
+    BTHID::Reset();
+  }
+
   // A Joy-Con ignores rumble until vibration is enabled with subcommand 0x48.
   void enableVibration()
   {
@@ -297,6 +306,15 @@ public:
       _lastModeRequest = millis();
       _joy.requestFullReport();
     }
+    else if (_gotFullReport && millis() - _lastMessage > LINK_LOST_MS)
+    {
+      // A Joy-Con in full mode reports 60 times a second, so this silence means it is gone
+      // (sync pressed, out of range, battery). Free the instance so it can reconnect.
+      _joy.forget();
+      setStick(0, 0);
+      setButtons(0);
+      return;
+    }
 
     // ---- stick ---------------------------------------------------------------------------
     // Only one stick is populated on a single Joy-Con. The parser already inverts Y so that
@@ -530,6 +548,7 @@ private:
   uint8_t  playerLed() const { return _side == JOYCON_LEFT ? 0x01 : 0x02; }
   uint32_t _lastLedStep = 0;
   static const uint16_t LED_ANIM_MS = 2000;
+  static const uint16_t LINK_LOST_MS = 3000;
   uint32_t _lastModeRequest = 0;
   int16_t  _centreX = 0;
   int16_t  _centreY = 0;
