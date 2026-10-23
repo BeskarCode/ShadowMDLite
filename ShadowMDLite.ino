@@ -97,6 +97,41 @@ bool UtilityArmsOpen = false;
 bool LeftDoorOpen = false;
 bool RightDoorOpen = false;
 
+// ---------------------------------------------------------------------------------------
+// Serial1 command queue (non-blocking). Each entry is sent from loop() and then waits
+// delayAfterMs before the next one, so long sequences (e.g. the staggered Scream) never
+// block the controller or the motors. Commands must be string literals (pointers are stored).
+// ---------------------------------------------------------------------------------------
+struct QueuedCmd
+{
+    const char* cmd;
+    uint16_t    delayAfterMs;
+};
+const uint8_t CMD_QUEUE_SIZE = 48;
+QueuedCmd     cmdQueue[CMD_QUEUE_SIZE];
+uint8_t       cmdQueueHead = 0;     // next entry to send
+uint8_t       cmdQueueCount = 0;
+unsigned long cmdQueueNextMs = 0;   // millis() when the next entry may be sent
+
+// ---------------------------------------------------------------------------------------
+// Reset diagnostics: why did the Mega restart?
+// MCUSR holds the hardware reset cause, but the Mega bootloader usually clears it before the
+// sketch runs, so we also keep a breadcrumb in .noinit RAM. That RAM survives a warm reset
+// (brownout, reset button, watchdog) but is random after a real power-on.
+// ---------------------------------------------------------------------------------------
+uint8_t resetFlagsAtBoot __attribute__((section(".noinit")));  // filled by captureResetFlags() (.init3)
+
+const uint32_t BREADCRUMB_MAGIC = 0x52324432UL;  // "R2D2"
+struct ResetBreadcrumb
+{
+    uint32_t magic;
+    uint32_t uptimeMs;      // last known uptime of the previous session
+    int16_t  lastMDFunc;    // last MarcDuino function executed (-1 = none)
+    uint32_t lastMDMs;      // uptime when it was executed
+    uint16_t warmResets;    // warm resets since last power-on
+};
+ResetBreadcrumb breadcrumb __attribute__((section(".noinit")));
+
 int CurrentSongNum = 0; //First of 5 Custom Song MP3 Files stats at zero, the first increment will make it 1.
 int CustomSongMax = 8; //Total Number of Custom Songs
 //Eebel END
@@ -112,6 +147,14 @@ int CustomSongMax = 8; //Total Number of Custom Songs
 //   S3:<COMANDO>  -> reenvía a Serial3
 // Ejemplo: S1::SE01  (la app/monitor serie puede enviar \n; el firmware añade \r automáticamente)
 #define ENABLE_PC_TO_MARCDUINO_FORWARDING 1
+
+// Debug: echo everything the dome MarcDuino/BetterDuino Master sends back on Serial1 to the USB Serial,
+// prefixed with "[MD] ". Useful to spot Master reboots (it prints its name + version on boot). 0 = off.
+#define DEBUG_ECHO_SERIAL1_RX 1
+
+// Scream (MD 2): 0 = original BetterDuino :SE01 (all panels at once), 1 = staggered panels sent
+// from the Mega (one every 150 ms; use it if the dome boards reset on Scream).
+#define SCREAM_STAGGERED 0
 
 // ---------------------------------------------------------------------------------------
 //                          MarcDuino Button Settings
@@ -222,12 +265,12 @@ int footBtnUp_MD_func = 2; // 2 = Scream - all panels open
 //---------------------------------
 // CONFIGURE: Arrow Left
 //---------------------------------
-int footBtnLeft_MD_func = 13; // 13 = Mid Awake mode reset (panel close, rnd sound, stop holos)
+int footBtnLeft_MD_func = 13; // 13 = Mid Awake mode (rnd sound, stop holos) - no panel movement
 
 //---------------------------------
 // CONFIGURE: Arrow Right
 //---------------------------------
-int footBtnRight_MD_func = 14; // 14 = Full Awake+ reset (panel close, rnd sound, holo move, holo lights on)
+int footBtnRight_MD_func = 14; // 14 = Full Awake+ mode (rnd sound, holo move, holo lights on) - no panel movement
 
 //---------------------------------
 // CONFIGURE: Arrow Down
@@ -659,6 +702,7 @@ void setup()
     while (!Serial);
     
     Serial.println("\r\nSystem starting up.\r\n");
+    reportResetCause();
 
     // CAN-Bus
     #ifdef CANBUS
@@ -740,6 +784,57 @@ bool LoopMessageSent = false;
 #if ENABLE_PC_TO_MARCDUINO_FORWARDING
 // Forward declaration (la definición real está más abajo en el fichero).
 void marcDuinoButtonPush(int type, int MD_func);
+
+// Runs before main()/setup(): grab MCUSR before anything else touches it.
+// (Defined down here, not next to the variables: the Arduino builder puts its auto-generated
+// prototypes before the first function in the file, which must come after the type declarations.)
+void captureResetFlags() __attribute__((naked, used, section(".init3")));
+void captureResetFlags() { resetFlagsAtBoot = MCUSR; MCUSR = 0; }
+
+// Prints why the Mega (re)started, using MCUSR (if the bootloader left it) and the .noinit breadcrumb.
+void reportResetCause()
+{
+    Serial.print(F("Reset cause (MCUSR=0x"));
+    Serial.print(resetFlagsAtBoot, HEX);
+    Serial.print(F("):"));
+    if (resetFlagsAtBoot & _BV(PORF))  Serial.print(F(" POWER-ON"));
+    if (resetFlagsAtBoot & _BV(EXTRF)) Serial.print(F(" EXTERNAL/RESET-PIN"));
+    if (resetFlagsAtBoot & _BV(BORF))  Serial.print(F(" BROWNOUT"));
+    if (resetFlagsAtBoot & _BV(WDRF))  Serial.print(F(" WATCHDOG"));
+    if (resetFlagsAtBoot & _BV(JTRF))  Serial.print(F(" JTAG"));
+    if (resetFlagsAtBoot == 0)         Serial.print(F(" unknown (cleared by bootloader)"));
+    Serial.println();
+
+    if (breadcrumb.magic == BREADCRUMB_MAGIC)
+    {
+        breadcrumb.warmResets++;
+        Serial.print(F("*** WARM RESET #"));
+        Serial.print(breadcrumb.warmResets);
+        Serial.println(F(" since power-on: Mega restarted WITHOUT losing power (brownout, reset or USB) ***"));
+        Serial.print(F("    Previous session uptime: "));
+        Serial.print(breadcrumb.uptimeMs / 1000.0, 1);
+        Serial.println(F(" s"));
+        if (breadcrumb.lastMDFunc >= 0)
+        {
+            Serial.print(F("    Last MarcDuino function: MD "));
+            Serial.print(breadcrumb.lastMDFunc);
+            Serial.print(F(", "));
+            Serial.print((breadcrumb.uptimeMs - breadcrumb.lastMDMs) / 1000.0, 1);
+            Serial.println(F(" s before the reset"));
+        }
+        else
+            Serial.println(F("    No MarcDuino function was executed in the previous session"));
+    }
+    else
+    {
+        Serial.println(F("Cold start (power-on)."));
+        breadcrumb.magic = BREADCRUMB_MAGIC;
+        breadcrumb.warmResets = 0;
+    }
+    breadcrumb.uptimeMs = 0;
+    breadcrumb.lastMDFunc = -1;
+    breadcrumb.lastMDMs = 0;
+}
 
 static inline void pcTrimRight(char* s)
 {
@@ -927,6 +1022,25 @@ void loop()
     }
 
     Usb.Task();
+
+    breadcrumb.uptimeMs = millis();   // reset diagnostics: last known uptime
+
+#if DEBUG_ECHO_SERIAL1_RX
+    // Echo dome Master output to the PC, one "[MD] " prefix per line
+    static bool md_lineStart = true;
+    while (Serial1.available())
+    {
+      char c = Serial1.read();
+      if (md_lineStart && c != '\r' && c != '\n') { Serial.print(F("[MD] ")); md_lineStart = false; }
+      if (c == '\r') continue;
+      Serial.write(c);
+      if (c == '\n') md_lineStart = true;
+    }
+#endif
+
+    // Send queued Serial1 commands (staggered Scream etc.).
+    // Runs before readUSB() so a sequence still finishes if the controller drops out.
+    processSerial1Queue();
 
     //Useful to enable with serial console when having controller issues.
     #ifdef TEST_CONROLLER
@@ -1379,12 +1493,101 @@ void toggleSettings()
 static inline void sendSerial1(const char* cmd) { Serial1.print(cmd); }
 static inline void sendSerial3(const char* cmd) { Serial3.print(cmd); }
 
+// Back-to-back commands get lost on the way Mega -> BetterDuino Master -> Slave -> AstroPixelsPlus.
+// Use this when sending several commands in a row (100 ms tested OK on the droid).
+const unsigned long MARCDUINO_CMD_GAP_MS = 100;
+static inline void sendSerial1Gap(const char* cmd) { Serial1.print(cmd); delay(MARCDUINO_CMD_GAP_MS); }
+
+// Adds a command to the non-blocking Serial1 queue. Returns false if the queue is full.
+bool queueSerial1(const char* cmd, uint16_t delayAfterMs = MARCDUINO_CMD_GAP_MS)
+{
+    if (cmdQueueCount >= CMD_QUEUE_SIZE)
+    {
+        Serial.println(F("WARN Serial1 queue full, command dropped"));
+        return false;
+    }
+    uint8_t tail = (cmdQueueHead + cmdQueueCount) % CMD_QUEUE_SIZE;
+    cmdQueue[tail].cmd = cmd;
+    cmdQueue[tail].delayAfterMs = delayAfterMs;
+    if (cmdQueueCount == 0 && (long)(cmdQueueNextMs - millis()) < 0)
+        cmdQueueNextMs = millis();   // idle queue: first command goes out right away
+    cmdQueueCount++;
+    return true;
+}
+
+void clearSerial1Queue()
+{
+    cmdQueueHead = 0;
+    cmdQueueCount = 0;
+}
+
+// Called from loop(): sends the next queued command once its time has come.
+void processSerial1Queue()
+{
+    if (cmdQueueCount == 0 || (long)(millis() - cmdQueueNextMs) < 0)
+        return;
+    Serial1.print(cmdQueue[cmdQueueHead].cmd);
+    cmdQueueNextMs = millis() + cmdQueue[cmdQueueHead].delayAfterMs;
+    cmdQueueHead = (cmdQueueHead + 1) % CMD_QUEUE_SIZE;
+    cmdQueueCount--;
+}
+
+// Original Scream: BetterDuino :SE01 opens all 13 panels at once (~4.7 s), then the Mega puts
+// logics, PSI and holo lights back to normal (BetterDuino does not do that by itself).
+void queueOriginalScream()
+{
+    clearSerial1Queue();             // pressing Scream again restarts it
+    queueSerial1(":SE01\r", 300);    // panels + scream sound + red alert + flicker (BetterDuino sequence)
+    queueSerial1("*HPA0051\r");      // all holos solid red
+    queueSerial1("@0P2\r", 4500);    // PSI: flash, then wait for the panel sequence to finish
+    queueSerial1("@0T1\r", 300);     // logics back to normal
+    // PSI "normal" on this droid is the PSI color wipe (effect 23) set by these two, not @0P1
+    queueSerial1("*APLE4231000\r", 300);   // front PSI
+    queueSerial1("*APLE5233000\r", 300);   // rear PSI
+    queueSerial1("*HPA0000\r");      // holo lights off
+}
+
+// Staggered Scream: same effects as BetterDuino :SE01, but the 13 dome panels open and close
+// one at a time (150 ms apart) instead of all at once, which browned out the boards.
+// Uses 36 queue entries; the whole sequence takes about 10 s.
+void queueStaggeredScream()
+{
+    static const char* const OPEN[13]  = { ":OP01\r", ":OP02\r", ":OP03\r", ":OP04\r", ":OP05\r", ":OP06\r", ":OP07\r",
+                                           ":OP08\r", ":OP09\r", ":OP10\r", ":OP11\r", ":OP12\r", ":OP13\r" };
+    static const char* const CLOSE[13] = { ":CL01\r", ":CL02\r", ":CL03\r", ":CL04\r", ":CL05\r", ":CL06\r", ":CL07\r",
+                                           ":CL08\r", ":CL09\r", ":CL10\r", ":CL11\r", ":CL12\r", ":CL13\r" };
+    // Panels go one at a time, 150 ms apart. Tested on the droid: pairs (30 ms apart) and
+    // 90 ms gaps both reset the dome Master; 150 ms runs clean.
+    const uint16_t PANEL_GAP_MS = 150;
+    const uint16_t HOLD_OPEN_MS = 3000;
+    const uint16_t DISPLAY_GAP_MS = 300;   // AstroPixelsPlus needs longer after an '@' sequence change, or the next command is lost
+
+    clearSerial1Queue();             // pressing Scream again restarts it
+    queueSerial1("$S\r", 300);       // scream sound (the Master needs time to talk to the MP3 player, or the sound is lost)
+    queueSerial1("@0T5\r", DISPLAY_GAP_MS);   // logics: red alert
+    queueSerial1("*MF04\r");         // magic panel flicker 4 s
+    queueSerial1("*F004\r");         // HP flicker 4 s
+    queueSerial1("*HPA0051\r");      // all holos solid red
+    queueSerial1("@0P2\r", DISPLAY_GAP_MS);   // PSI: flash
+    for (uint8_t i = 0; i < 13; i++)
+        queueSerial1(OPEN[i], (i == 12) ? HOLD_OPEN_MS : PANEL_GAP_MS);
+    for (uint8_t i = 0; i < 13; i++)
+        queueSerial1(CLOSE[i], (i == 12) ? 1500 : PANEL_GAP_MS);
+    queueSerial1("@0T1\r", DISPLAY_GAP_MS);   // logics back to normal
+    // PSI "normal" on this droid is the PSI color wipe (effect 23) set by these two, not @0P1
+    queueSerial1("*APLE4231000\r", DISPLAY_GAP_MS);   // front PSI
+    queueSerial1("*APLE5233000\r", DISPLAY_GAP_MS);   // rear PSI
+    queueSerial1("*HPA0000\r");      // holo lights off
+}
+
 // =======================================================================================
 // This is the main MarcDuino Button Management Function
 // =======================================================================================
 void marcDuinoButtonPush(int type, int MD_func)
 {
-  
+  breadcrumb.lastMDFunc = MD_func;
+  breadcrumb.lastMDMs = millis();
+
   if (type == 1)  // Std Marcduino Function Call Configured
   {
 
@@ -1398,10 +1601,11 @@ void marcDuinoButtonPush(int type, int MD_func)
 
       // 2 = Scream - all panels open
       case 2:
-        Serial1.print(":SE01\r");        
-        Serial1.print("*HPA0051\r");         
-        sendSerial1("@0P2\r");  
-     
+#if SCREAM_STAGGERED
+        queueStaggeredScream();
+#else
+        queueOriginalScream();
+#endif
         break;
 
       // 3 = Wave, One Panel at a time
@@ -1463,14 +1667,14 @@ void marcDuinoButtonPush(int type, int MD_func)
         sendSerial1("*HPS601\r");
         break;
                 
-      // 11 = Quite mode reset (panel close, stop holos, stop sounds)
+      // 11 = Lights reset (logics + PSI normal, holo lights off) - no panel movement
       case 11:
-        sendSerial1("@0T1\r");
-        sendSerial1(":SE11\r");
-        sendSerial1("*HPT0000\r");         
-        sendSerial1("*HPR0000\r");         
-        sendSerial1("*HPF0000\r");         
-        sendSerial1("*APLE4231000\r");
+        sendSerial1Gap("@0T1\r");
+        sendSerial1Gap("@0P1\r");
+        sendSerial1Gap("*HPT0000\r");
+        sendSerial1Gap("*HPR0000\r");
+        sendSerial1Gap("*HPF0000\r");
+        sendSerial1Gap("*APLE4231000\r");
         sendSerial1("*APLE5233000\r");
         break;
                 
@@ -1483,23 +1687,25 @@ void marcDuinoButtonPush(int type, int MD_func)
 
         break;
                 
-      // 13 = Mid Awake mode reset (panel close, rnd sound, stop holos)
+      // 13 = Mid Awake mode (rnd sound, stop holos) - no panel movement
+      // (:SE13 removed: its panel_init moved all 13 dome servos at once and reset the Mega)
       case 13:
-        Serial1.print(":SE13\r");        
-        sendSerial1("*HPF0000\r");       
-        sendSerial1("*HPT0000\r");        
-        sendSerial1("*HPR0000\r");        
+        sendSerial1Gap("*ST00\r");       // all holos stop
+        sendSerial1Gap("$R\r");          // random sounds
+        sendSerial1Gap("*HPF0000\r");
+        sendSerial1Gap("*HPT0000\r");
+        sendSerial1("*HPR0000\r");
         break;
                 
-      // 14 = Full Awake+ reset (panel close, rnd sound, holo move, holo lights on)
+      // 14 = Full Awake+ mode (rnd sound, holo move, holo lights on) - no panel movement
+      // (:SE14 removed: its panel_init moved all 13 dome servos at once and reset the Mega)
       case 14:
 
-        Serial1.print(":SE14\r");
-        delay(15);
-        sendSerial1("*HPF001\r");
-        delay(15);
-        sendSerial1("*HPT001\r");
-        delay(15);
+        sendSerial1Gap("*RD00\r");       // all holos random movement
+        sendSerial1Gap("*ON00\r");       // all holo lights on
+        sendSerial1Gap("$R\r");          // random sounds
+        sendSerial1Gap("*HPF001\r");
+        sendSerial1Gap("*HPT001\r");
         sendSerial1("*HPR001\r");
 
         break;
@@ -1597,12 +1803,10 @@ void marcDuinoButtonPush(int type, int MD_func)
         Serial1.print("$m\r");
         break;
                 
-      // 30 = Open All Dome Panels
+      // 30 = Reset astropixels plus
       case 30:
 
         
-        Serial3.print(":OP04\r"); //Left Body Door
-        Serial3.print(":OP07\r"); //Right Body Door
         Serial1.print("@1T3\r");
         delay(550); //wait for Main Doors        
         Serial1.print(":ST00\r"); //Stop the buzz
