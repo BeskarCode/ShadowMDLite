@@ -255,26 +255,44 @@ private:
     {
       case 0:   // wait until it sends full reports and knows its side
         if (jc->preferredSlot() == SLOT_ANY) { if (now - _vSince > 3000) accept(now); return; }
-        jc->raw()->readSpi(0x2000, 10);
         _vStep = 1; _vSince = now;
         return;
-      case 1:
-        if (jc->raw()->spiReplyReady(0x2000, _r0))
-        {
-          jc->raw()->readSpi(0x2026, 10);
-          _vStep = 2; _vSince = now;
-        }
-        else if (now - _vSince > 1500) accept(now);   // no answer: do not block the user
+      case 1:   // let the connection signal finish: it sends a subcommand every 200 ms for
+                // 2 s, and a Joy-Con drops a subcommand that arrives while it is busy
+        if (now - _vSince < JCP_VERIFY_SETTLE_MS) return;
+        _vTries = 0;
+        readRecord(jc, 0x2000, now);
+        _vStep = 2;
         return;
       case 2:
+        if (jc->raw()->spiReplyReady(0x2000, _r0)) { _vTries = 0; readRecord(jc, 0x2026, now); _vStep = 3; }
+        else retryOrAccept(jc, 0x2000, now);
+        return;
+      case 3:
         if (jc->raw()->spiReplyReady(0x2026, _r1))
         {
           if (jcpHostRecordsMatch(_r0, _r1, _btd->my_bdaddr)) accept(now);
           else reject(now);
         }
-        else if (now - _vSince > 1500) accept(now);
+        else retryOrAccept(jc, 0x2026, now);
         return;
     }
+  }
+
+  void readRecord(JoyConController* jc, uint16_t addr, uint32_t now)
+  {
+    jc->raw()->readSpi(addr, 10);
+    _vTries++;
+    _vSince = now;
+  }
+
+  // No answer yet: ask again, a few times. If it never answers, accept it anyway: never
+  // block the user on a diagnostic.
+  void retryOrAccept(JoyConController* jc, uint16_t addr, uint32_t now)
+  {
+    if (now - _vSince < JCP_VERIFY_REPLY_MS) return;
+    if (_vTries < JCP_VERIFY_TRIES) readRecord(jc, addr, now);
+    else accept(now);
   }
 
   void accept(uint32_t now)
@@ -384,6 +402,10 @@ private:
   int8_t            _verify = -1;        // index of the Joy-Con being checked, -1 none
   uint8_t           _vStep = 0;
   uint32_t          _vSince = 0;
+  uint8_t           _vTries = 0;
+  static const uint16_t JCP_VERIFY_SETTLE_MS = 2500;
+  static const uint16_t JCP_VERIFY_REPLY_MS  = 500;
+  static const uint8_t  JCP_VERIFY_TRIES     = 3;
   uint8_t           _r0[10];
   uint8_t           _r1[10];
   bool              _scanInterlaced = false;
