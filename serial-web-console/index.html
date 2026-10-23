@@ -767,10 +767,27 @@
         }
       }
 
+      // A chatty Mega (verbose output while driving) sends dozens of lines a second. Appending
+      // to an ever-growing log froze the page, so lines are batched once per frame and only
+      // the last LOG_MAX_CHARS are kept.
+      const LOG_MAX_CHARS = 60000;
+      let logPending = "";
+      let logScheduled = false;
       function appendLog(prefix, text) {
-        const line = "[" + new Date().toLocaleTimeString() + "] " + prefix + text + "\n";
-        logEl.textContent += line;
-        logEl.scrollTop = logEl.scrollHeight;
+        logPending += "[" + new Date().toLocaleTimeString() + "] " + prefix + text + "\n";
+        if (logScheduled) return;
+        logScheduled = true;
+        requestAnimationFrame(() => {
+          logScheduled = false;
+          let t = logEl.textContent + logPending;
+          logPending = "";
+          if (t.length > LOG_MAX_CHARS) {
+            t = t.slice(t.length - LOG_MAX_CHARS);
+            t = t.slice(t.indexOf("\n") + 1);   // start on a whole line
+          }
+          logEl.textContent = t;
+          logEl.scrollTop = logEl.scrollHeight;
+        });
       }
 
       async function startReadLoop() {
