@@ -1,6 +1,6 @@
 # Driving a droid with a Nintendo Switch Joy-Con
 
-Everything here is about replacing the PS3 Move Navigation controller, which Sony stopped making years ago, with a single Joy-Con: one hand, pocket size, analog stick, USB-C, still sold everywhere.
+Everything here is about replacing the PS3 Move Navigation controller, which Sony stopped making years ago, with a single Joy-Con: one hand, pocket size, analog stick, still sold everywhere.
 
 **No new hardware is needed.** A Joy-Con speaks the same classic Bluetooth HID as the Navs, so the same Arduino Mega ADK and the same Bluetooth dongle work.
 
