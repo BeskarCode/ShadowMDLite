@@ -23,11 +23,15 @@ ShadowMD Lite can run with a single Nintendo Switch Joy-Con in each hand instead
 
 | Build, Arduino Mega ADK | Flash | RAM |
 |---|---|---|
-| Before the controller layer, PS3 Nav | 49,660 | 4,463 (54%) |
-| PS3 Nav, older library | 50,160 | 4,551 (55%) |
-| Joy-Con, library 1.7.0 | 51,268 | 4,718 (57%) |
+**Pairing needs no re-upload.** On the first boot the droid opens a pairing session by itself: hold the sync button on the left Joy-Con until it vibrates, then on the right one. Every day after that, press any button on each Joy-Con and it calls the droid back. To pair again, hold **Minus + Capture** (left) or **Plus + Home** (right) for 5 seconds, reset the Mega three times in a row, or press **Pair Joy-Con** in the web console (it sends `JOYPAIR`). Each step plays an R2 sound, set in `ControllerConfig.h`. The whole guide, including what to do with a Joy-Con that has been used on a Switch, is in [`JoyCon/README.md`](JoyCon/README.md#pairing).
 
-**Status:** everything compiles. **Nothing has been tested on a droid yet.** Run `JoyCon/BenchTest` first and drive it in your workshop before taking it to an event.
+| Build, Arduino Mega ADK | Flash | RAM |
+|---|---|---|
+| Before the controller layer, PS3 Nav | 49,660 | 4,463 (54%) |
+| PS3 Nav, older library | 50,432 | 4,569 (55%) |
+| Joy-Con, library 1.7.0, with pairing | 55,530 | 4,687 (57%) |
+
+**Status:** everything compiles. Pairing and reconnecting are bench-tested with two Joy-Cons. **Nothing has been driven on a droid yet.** Run `JoyCon/BenchTest` first and drive it in your workshop before taking it to an event.
 
 `ShadowMDLite` is a cleaned‑up, modernized version of the classic **Shadow MD** sketch for Arduino Mega ADK, designed to be easier to maintain and to work smoothly with **BetterDuino** firmware and **AstropixelsPlus** logic effects.
 
