@@ -24,6 +24,11 @@
 #ifndef JOYCON_COMBO_HOLD_MS
   #define JOYCON_COMBO_HOLD_MS          5000UL
 #endif
+// The roles held for JOYCON_COMBO_HOLD_MS to start pairing. DB_A | DB_B is Minus + Capture
+// on the left Joy-Con and Plus + Home on the right one.
+#ifndef JOYCON_PAIR_COMBO
+  #define JOYCON_PAIR_COMBO             (DB_A | DB_B)
+#endif
 #ifndef JOYCON_PAIR_TIMEOUT_MS
   #define JOYCON_PAIR_TIMEOUT_MS        60000UL
 #endif
@@ -335,7 +340,7 @@ private:
     for (uint8_t i = 0; i < 2; i++)
     {
       JoyConController* jc = _jc[i];
-      const bool held = jc->isConnected() && jc->pressed(DB_A | DB_B);
+      const bool held = jc->isConnected() && jc->pressed(JOYCON_PAIR_COMBO);
       const uint8_t before = _hold[i].ticks();
       if (_hold[i].update(held, now)) { buzz(i, 500, now); request(); return; }
       if (_hold[i].ticks() > before) buzz(i, 120, now);   // one tick per second held
