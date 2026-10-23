@@ -285,7 +285,9 @@ private:
     EEPROM.put(JOYCON_EEPROM_ADDR, _rec);
     buzz(i, 300, now);
 
-    if (_rec.complete()) end(JCP_DONE);
+    // Done when both halves are here, not when both sides are recorded: when re-pairing
+    // one Joy-Con the record already holds both, and the session must still wait for it.
+    if (_jc[0]->isConnected() && _jc[1]->isConnected()) end(JCP_DONE);
     else
     {
       _start = now;                      // a fresh minute for the other half
