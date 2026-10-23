@@ -177,19 +177,22 @@ public:
 
     digitalWrite(LED_BUILTIN, (now / 250) & 1);   // 2 Hz while pairing
 
-    // The library gives up searching after a while, and stops after each pairing.
-    if (!_btd->pairWithHIDDevice && _verify < 0 && now - _lastArm > JOYCON_PAIR_REARM_MS)
-    {
-      _lastArm = now;
-      _btd->pairWithHID();
-    }
-
     if (_verify >= 0) { verifyStep(now); return; }
 
     for (uint8_t i = 0; i < 2; i++)
     {
       if (_jc[i]->isConnected() && !_known[i]) { startVerify(i, now); return; }
       if (!_jc[i]->isConnected()) _known[i] = false;
+    }
+
+    // The library gives up searching after a while, and stops after each pairing. Only after
+    // the check above: re-arming in the same pass a Joy-Con finished pairing made the library
+    // find that Joy-Con again and retry Create Connection to it (error 0x0B), after which both
+    // Joy-Cons stopped sending reports and dropped.
+    if (!_btd->pairWithHIDDevice && now - _lastArm > JOYCON_PAIR_REARM_MS)
+    {
+      _lastArm = now;
+      _btd->pairWithHID();
     }
 
     // Out of time. If one Joy-Con was paired in this session that is a success: the second
