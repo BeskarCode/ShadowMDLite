@@ -64,6 +64,15 @@ public:
     BTHID::Reset();
   }
 
+  // Subcommand 0x08 00: leave "shipment low power" mode. In that mode a sleeping Joy-Con
+  // does not wake up and call its host when a button is pressed. The Switch sends this
+  // after every connection (dekuNukem, Nintendo_Switch_Reverse_Engineering).
+  void allowButtonWake()
+  {
+    const uint8_t arg = 0x00;
+    sendSubcommand(0x08, &arg, 1);
+  }
+
   // A Joy-Con ignores rumble until vibration is enabled with subcommand 0x48.
   void enableVibration()
   {
@@ -336,7 +345,8 @@ public:
       }
       _ledAnimUntil = millis() + LED_ANIM_MS;   // "connected" signal, see below
       _joy.enableVibration();                    // off by default; buzz() needs it
-      _lastLedStep = 0;
+      _lastLedStep = millis();             // first LED step 200 ms later: subcommands need room
+      _wakeSent = false;
       recalibrate();                       // centre must be measured on the right stick
       setStick(0, 0);
       setButtons(0);
@@ -357,8 +367,12 @@ public:
       else if (t - _lastLedStep >= 200)
       {
         _lastLedStep = t;
-        _ledOuter = !_ledOuter;
-        _joy.setLedRaw(_ledOuter ? 0x09 : 0x06);   // LED1+LED4, then LED2+LED3
+        if (!_wakeSent) { _wakeSent = true; _joy.allowButtonWake(); }   // takes one LED step
+        else
+        {
+          _ledOuter = !_ledOuter;
+          _joy.setLedRaw(_ledOuter ? 0x09 : 0x06);   // LED1+LED4, then LED2+LED3
+        }
       }
     }
 
@@ -545,6 +559,7 @@ private:
   bool     _ledOuter = false;
   uint32_t _ledAnimUntil = 0;
   bool     _waiting = false;
+  bool     _wakeSent = true;
   uint8_t  playerLed() const { return _side == JOYCON_LEFT ? 0x01 : 0x02; }
   uint32_t _lastLedStep = 0;
   static const uint16_t LED_ANIM_MS = 2000;
