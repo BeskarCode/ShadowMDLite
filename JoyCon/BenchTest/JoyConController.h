@@ -17,6 +17,12 @@
 //     flash at 0x603D, which the library does not expose, so this class auto centres on
 //     connection instead: it averages the stick while it is untouched and uses that as
 //     zero. Cheaper, and it also soaks up the drift these sticks are famous for.
+//   - Safety: the stick only drives once it has been seen centred. A worn Joy-Con can rest
+//     40% off centre, which would drive the droid the moment it pairs. So the stick reads
+//     zero after every connection until it sits in the centre; a centre measured too far
+//     from where a stick rests is measured again; and a stick that freezes off centre
+//     (a thumb never holds that still) stops counting until it comes back to the centre.
+//     Buttons are not affected.
 //
 // The library parser handles the one real trap for us: a Joy-Con boots in "simple HID
 // mode" (report 0x3F) where the stick is only an 8 direction hat. SwitchProParser sees
@@ -261,6 +267,7 @@ public:
     _calSamples = 0;
     _calSumX = 0;
     _calSumY = 0;
+    _armed = false;                        // the stick drives again only once seen centred
   }
 
   // ---- DroidController -----------------------------------------------------------------
@@ -284,6 +291,7 @@ public:
     if (now && !_wasConnected)
     {
       recalibrate();                       // fresh connection, measure the centre again
+      _warned = false;
       _gotFullReport = false;
       _lastModeRequest = 0;
       _sideKnown = false;
@@ -400,9 +408,21 @@ public:
       _calSumY += rawY;
       if (++_calSamples >= CAL_SAMPLES)
       {
-        _centreX = _calSumX / CAL_SAMPLES;
-        _centreY = _calSumY / CAL_SAMPLES;
-        _calibrating = false;
+        const int16_t cx = _calSumX / CAL_SAMPLES;
+        const int16_t cy = _calSumY / CAL_SAMPLES;
+        if (abs(cx) > CENTRE_MAX_FROM_NOMINAL || abs(cy) > CENTRE_MAX_FROM_NOMINAL)
+        {
+          // No healthy stick rests that far out: it is being held, or it is worn. Taking
+          // this as the centre would hide a stick that may jump back. Measure again.
+          warnOnce(F(": stick rests far from centre (held, or drift). Stick off until it centres."));
+          recalibrate();
+        }
+        else
+        {
+          _centreX = cx;
+          _centreY = cy;
+          _calibrating = false;
+        }
       }
       setStick(0, 0);       // report centred while measuring, never a stale value
       }
@@ -413,9 +433,10 @@ public:
       // sits near the centre and does not move at all for a while, nobody is holding it:
       // take that spot as the new centre. A thumb is never that still.
       if (newReport) trackDrift(rawX, rawY);
+      if (newReport) checkArmed(rawX - _centreX, rawY - _centreY, rawX, rawY);
 
-      int16_t x = rawX - _centreX;
-      int16_t y = _centreY - rawY;          // forward positive from here on
+      int16_t x = _armed ? rawX - _centreX : 0;
+      int16_t y = _armed ? _centreY - rawY : 0;   // forward positive from here on
 
       if (_grip == JOYCON_SIDEWAYS)
       {
@@ -497,6 +518,9 @@ public:
 
   bool isCalibrating() const { return _calibrating; }
 
+  // False while the stick is ignored for safety (not yet seen centred, or frozen off centre).
+  bool isStickArmed() const { return _armed; }
+
   // Escape hatch for anything this wrapper does not cover yet.
   JoyConBT* raw() { return &_joy; }
 
@@ -535,6 +559,58 @@ private:
     }
   }
 
+  // dx, dy: offset from the measured centre. Arms the stick once it is seen centred; disarms
+  // it if it freezes off centre for STUCK_MS, short of the edge. Holding full deflection
+  // against the gate is steady too, which is why the edge does not count.
+  void checkArmed(int16_t dx, int16_t dy, int16_t rawX, int16_t rawY)
+  {
+#ifdef JOYCON_DEBUG_STICK
+    static uint32_t dbgAt = 0;
+    if (millis() - dbgAt >= 100)
+    {
+      dbgAt = millis();
+      Serial.print(F("STK ")); Serial.print(name());
+      Serial.print(' '); Serial.print(dx); Serial.print(' '); Serial.print(dy);
+      Serial.print(F(" armed=")); Serial.println(_armed);
+    }
+#endif
+    const bool centred = abs(dx) < ARM_BAND && abs(dy) < ARM_BAND;
+    if (!_armed)
+    {
+      if (centred)
+      {
+        _armed = true;
+        if (_warned) { Serial.print(name()); Serial.println(F(": stick centred, driving again.")); _warned = false; }
+      }
+      return;
+    }
+    const int16_t edge = (int16_t)((int32_t)_range * 85 / 100);
+    const bool atEdge = abs(dx) > edge || abs(dy) > edge;
+    const bool still = abs(rawX - _stuckX) <= DRIFT_STILL_NOISE &&
+                       abs(rawY - _stuckY) <= DRIFT_STILL_NOISE;
+    const uint32_t now = millis();
+    if (centred || atEdge || !still)
+    {
+      _stuckX = rawX;
+      _stuckY = rawY;
+      _stuckSince = now;
+      return;
+    }
+    if (now - _stuckSince >= STUCK_MS)
+    {
+      _armed = false;
+      warnOnce(F(": stick frozen off centre (drift?). Stick off until it centres."));
+    }
+  }
+
+  void warnOnce(const __FlashStringHelper* msg)
+  {
+    if (_warned) return;
+    _warned = true;
+    Serial.print(name());
+    Serial.println(msg);
+  }
+
   int16_t scale(int32_t v) const
   {
     int32_t out = (v * (int32_t)DC_STICK_MAX) / _range;
@@ -567,6 +643,15 @@ private:
   static const int16_t  DRIFT_NOMINAL_OFFSET = 400; // raw, from 2048; real rest points seen: up to ~310
   static const int16_t  DRIFT_STILL_NOISE = 12;    // raw jitter of a stick nobody touches
   static const uint16_t DRIFT_STILL_MS    = 1500;
+  // Safety (see the top of the file)
+  bool     _armed = false;
+  bool     _warned = false;
+  int16_t  _stuckX = 0;
+  int16_t  _stuckY = 0;
+  uint32_t _stuckSince = 0;
+  static const int16_t  ARM_BAND = 80;                 // raw, about 8% of the range: "centred"
+  static const int16_t  CENTRE_MAX_FROM_NOMINAL = 400; // raw; healthy rest points seen: up to ~310
+  static const uint16_t STUCK_MS = 2000;               // a thumb never holds this still for 2 s
   bool     _ledOuter = false;
   uint32_t _ledAnimUntil = 0;
   bool     _waiting = false;

@@ -116,6 +116,8 @@ Plug the Bluetooth dongle in before powering up the controllers. The library rea
 
 **Full scale is smaller than the spec says.** The axes are 12 bit, but a real Joy-Con stick reaches about ±1100 from centre, not ±2048. The default range is 1000, so a full push reads full scale.
 
+**Safety: the stick only drives once it has been seen centred.** A worn Joy-Con can rest far off centre (one of ours rested 40% off), which would drive the droid the moment it pairs. So after every connection the stick reads zero until it sits in the centre, and the serial console says why: `JOY-L: stick rests far from centre (held, or drift). Stick off until it centres.` Move the stick and let go; when it centres you get `stick centred, driving again`. A stick that freezes off centre for 2 seconds is switched off the same way. Buttons keep working. What no software can do is tell a stick that rests at 25% and keeps wobbling from a thumb holding it there: **if your stick does not come back to zero in the bench test, replace it** (a spare stick costs a few euros) before driving with it.
+
 ## Credit
 
 The Joy-Con protocol details, the subcommands and the pairing records come from **dekuNukem's** reverse engineering notes, https://github.com/dekuNukem/Nintendo_Switch_Reverse_Engineering. The note on subcommand `08` is what put us on the trail of the reconnection problem. Thank you.
