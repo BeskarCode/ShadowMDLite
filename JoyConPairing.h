@@ -163,6 +163,7 @@ public:
     }
 
     const uint32_t now = millis();
+    tunePageScan(now);
 
     // Running for a while: this boot was not part of a triple reset.
     if (!_bootsCleared && now > JOYCON_TRIPLE_RESET_WINDOW_MS)
@@ -339,6 +340,34 @@ private:
       }
   }
 
+  // The dongle's default page scan listens 11.25 ms every 1.28 s. A sleeping Joy-Con woken
+  // by a button calls its host in short bursts (a Switch listens almost all the time), so
+  // its calls almost never landed and pressing a button did not reconnect. While a Joy-Con
+  // is missing, make the dongle listen all the time; with both connected go back to the
+  // default, because listening all the time roughly doubled the report lag (~35 ms average,
+  // 91 ms worst, against under 25 ms). Interlaced scanning is set once. The settings last
+  // until the next HCI reset, that is until the Mega restarts.
+  void tunePageScan(uint32_t now)
+  {
+    if (!_btd->waitingForConnection || now - _scanAt < 200) return;   // library idle, one command at a time
+    if (!_scanInterlaced)
+    {
+      uint8_t cmd[4] = { 0x47, 0x0C, 0x01, 0x01 };   // Write_Page_Scan_Type: interlaced
+      _btd->HCI_Command(cmd, sizeof(cmd));
+      _scanInterlaced = true;
+      _scanAt = now;
+      return;
+    }
+    const bool fast = !(_jc[0]->isConnected() && _jc[1]->isConnected());
+    if (fast == _scanFast) return;
+    // Write_Page_Scan_Activity: interval, then window, in 0.625 ms slots. Fast: 11.25 ms
+    // window every 11.25 ms. Normal: 11.25 ms every 1.28 s, the default.
+    uint8_t cmd[7] = { 0x1C, 0x0C, 0x04, (uint8_t)(fast ? 0x12 : 0x00), (uint8_t)(fast ? 0x00 : 0x08), 0x12, 0x00 };
+    _btd->HCI_Command(cmd, sizeof(cmd));
+    _scanFast = fast;
+    _scanAt = now;
+  }
+
   BTD*              _btd;
   JoyConController* _jc[2];
   void            (*_onEvent)(JoyConPairEvent) = NULL;
@@ -357,6 +386,9 @@ private:
   uint32_t          _vSince = 0;
   uint8_t           _r0[10];
   uint8_t           _r1[10];
+  bool              _scanInterlaced = false;
+  bool              _scanFast = false;      // the dongle starts on the default
+  uint32_t          _scanAt = 0;
 };
 
 #endif // JOYCON_PAIRING_LOGIC_ONLY
