@@ -156,6 +156,15 @@ int CustomSongMax = 8; //Total Number of Custom Songs
 // from the Mega (one every 150 ms; use it if the dome boards reset on Scream).
 #define SCREAM_STAGGERED 0
 
+// Dome tracker (PoC): the PC sends DM:<speed> over USB (needs ENABLE_PC_TO_MARCDUINO_FORWARDING)
+// and the dome turns at that speed. It stops if no DM: arrives for DOME_TRACKER_TIMEOUT_MS,
+// and the Nav dome stick always wins: after any manual move DM: is ignored for
+// DOME_TRACKER_MANUAL_HOLD_MS. 0 = off.
+#define ENABLE_DOME_TRACKER 1
+#define DOME_TRACKER_MAX_SPEED       80     // |DM:| is clamped to this (SyRen range is 0-127)
+#define DOME_TRACKER_TIMEOUT_MS      300
+#define DOME_TRACKER_MANUAL_HOLD_MS  2000
+
 // ---------------------------------------------------------------------------------------
 //                          MarcDuino Button Settings
 // ---------------------------------------------------------------------------------------
@@ -618,6 +627,11 @@ static const uint8_t kDomePanelCount = 10;
 // ---------------------------------------------------------------------------------------
 
 long previousDomeMillis = millis();
+#if ENABLE_DOME_TRACKER
+int           domeTrackerSpeed = 0;        // last DM: speed from the PC
+unsigned long domeTrackerLastMs = 0;       // millis() of the last DM:
+unsigned long domeManualLastMs = 0;        // millis() of the last manual dome move
+#endif
 long previousFootMillis = millis();
 long previousMarcDuinoMillis = millis();
 long previousDomeToggleMillis = millis();
@@ -921,6 +935,26 @@ static void processPCSerialLine(const char* line)
     return;
   }
 
+#if ENABLE_DOME_TRACKER
+  // Dome tracker: DM:<speed>, -127..127, clamped to DOME_TRACKER_MAX_SPEED. Silent on success
+  // because the PC sends it ~15 times a second.
+  if ((p[0] == 'D' || p[0] == 'd') && (p[1] == 'M' || p[1] == 'm') && p[2] == ':')
+  {
+    char* endPtr = NULL;
+    long speed = strtol(p + 3, &endPtr, 10);
+    if (endPtr == p + 3)
+    {
+      Serial.println(F("ERR Invalid DM speed"));
+      return;
+    }
+    if (speed >  DOME_TRACKER_MAX_SPEED) speed =  DOME_TRACKER_MAX_SPEED;
+    if (speed < -DOME_TRACKER_MAX_SPEED) speed = -DOME_TRACKER_MAX_SPEED;
+    domeTrackerSpeed = (int)speed;
+    domeTrackerLastMs = millis();
+    return;
+  }
+#endif
+
   // Routing: S1:<COMANDO> or S3:<COMANDO>
   // Supports command strings that already begin with ':' (as in MarcDuino protocol).
   if ((p[0] == 'S' || p[0] == 's') && (p[1] == '1' || p[1] == '3') && p[2] == ':')
@@ -1068,7 +1102,11 @@ void loop()
     printOutput();
         
     // If dome automation is enabled - Call function
-    if (domeAutomation && time360DomeTurn > 1999 && time360DomeTurn < 8001 && domeAutoSpeed > 49 && domeAutoSpeed < 101)  
+    if (domeAutomation && time360DomeTurn > 1999 && time360DomeTurn < 8001 && domeAutoSpeed > 49 && domeAutoSpeed < 101
+#if ENABLE_DOME_TRACKER
+        && !domeTrackerActive()
+#endif
+       )
     {
        autoDome(); 
     }   
@@ -1358,33 +1396,58 @@ void rotateDome(int domeRotationSpeed, String mesg)
     }
 }
 
+#if ENABLE_DOME_TRACKER
+// Speed the dome tracker wants right now, or 0: no fresh DM:, or the stick moved recently.
+bool domeTrackerActive()
+{
+  unsigned long now = millis();
+  return (now - domeTrackerLastMs) < DOME_TRACKER_TIMEOUT_MS
+      && (now - domeManualLastMs) >= DOME_TRACKER_MANUAL_HOLD_MS;
+}
+
+int domeTrackerOverride(int manualSpeed)
+{
+  if (manualSpeed != 0)
+  {
+    domeManualLastMs = millis();
+    return manualSpeed;
+  }
+  return domeTrackerActive() ? domeTrackerSpeed : 0;
+}
+#else
+int domeTrackerOverride(int manualSpeed) { return manualSpeed; }
+#endif
+
 void domeDrive()
 {
   //Flood control prevention
   //This is intentionally set to double the rate of the Dome Motor Latency
-  if ((millis() - previousDomeMillis) < (2*serialLatency) ) return;  
-  
+  if ((millis() - previousDomeMillis) < (2*serialLatency) ) return;
+
   int domeRotationSpeed = 0;
   int ps3NavControlSpeed = 0;
-  
-  if (PS3NavDome->PS3NavigationConnected) 
+
+  if (PS3NavDome->PS3NavigationConnected)
   {
-    
+
      ps3NavControlSpeed = ps3DomeDrive(PS3NavDome);
 
-     domeRotationSpeed = ps3NavControlSpeed; 
+     domeRotationSpeed = domeTrackerOverride(ps3NavControlSpeed);
 
      rotateDome(domeRotationSpeed,"Controller Move");
-    
+
   } else if (PS3NavFoot->PS3NavigationConnected && PS3NavFoot->getButtonPress(L2))
   {
-    
+
      ps3NavControlSpeed = ps3DomeDrive(PS3NavFoot);
 
-     domeRotationSpeed = ps3NavControlSpeed; 
+     domeRotationSpeed = domeTrackerOverride(ps3NavControlSpeed);
 
      rotateDome(domeRotationSpeed,"Controller Move");
-    
+
+  } else if (domeTrackerOverride(0) != 0)
+  {
+     rotateDome(domeTrackerOverride(0),"Dome Tracker");
   } else
   {
      if (!isDomeMotorStopped)
