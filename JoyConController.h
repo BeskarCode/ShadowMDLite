@@ -326,9 +326,11 @@ public:
     }
 
     // ---- stick ---------------------------------------------------------------------------
-    // Only one stick is populated on a single Joy-Con. The parser already inverts Y so that
-    // forward is positive; this layer wants forward negative, like the Nav reports it, so
-    // it gets inverted back below.
+    // Only one stick is populated on a single Joy-Con. The parser returns Y with forward
+    // NEGATIVE (2048 - raw, "the same coordinate as the simple report"), despite what its
+    // comment suggests. Below, Y is first turned to forward positive, so the sideways
+    // rotation works in ordinary x/y terms, then back to forward negative for this layer,
+    // like the Nav reports it: stick pushed away from you reads negative.
     // Which half connected to this slot depends on who reconnects first, not on the slot.
     // A half reports the other half's stick as all zeros, which the parser turns into
     // exactly (-2048, 2048), so the first full report tells us which one this is.
@@ -362,7 +364,7 @@ public:
       if ((int32_t)(t - _ledAnimUntil) >= 0)
       {
         _ledAnimUntil = 0;
-        _joy.setLedRaw(_waiting ? 0xF0 : playerLed());
+        _joy.setLedRaw(_waiting ? 0xF0 : currentLed());
       }
       else if (t - _lastLedStep >= 200)
       {
@@ -413,7 +415,7 @@ public:
       if (newReport) trackDrift(rawX, rawY);
 
       int16_t x = rawX - _centreX;
-      int16_t y = rawY - _centreY;
+      int16_t y = _centreY - rawY;          // forward positive from here on
 
       if (_grip == JOYCON_SIDEWAYS)
       {
@@ -481,7 +483,16 @@ public:
   void setWaiting(bool on)
   {
     _waiting = on;
-    if (isConnected() && !_ledAnimUntil) _joy.setLedRaw(on ? 0xF0 : playerLed());
+    if (isConnected() && !_ledAnimUntil) _joy.setLedRaw(on ? 0xF0 : currentLed());
+  }
+
+  // Player LEDs to show once connected, instead of this half's default (LED 1 left, LED 2
+  // right). Low nibble on, high nibble flashing, as subcommand 0x30 takes them. 0 goes back
+  // to the default. Kept across reconnections.
+  void setPlayerLeds(uint8_t pattern)
+  {
+    _ledOverride = pattern;
+    if (isConnected() && !_ledAnimUntil && !_waiting) _joy.setLedRaw(currentLed());
   }
 
   bool isCalibrating() const { return _calibrating; }
@@ -560,7 +571,9 @@ private:
   uint32_t _ledAnimUntil = 0;
   bool     _waiting = false;
   bool     _wakeSent = true;
+  uint8_t  _ledOverride = 0;
   uint8_t  playerLed() const { return _side == JOYCON_LEFT ? 0x01 : 0x02; }
+  uint8_t  currentLed() const { return _ledOverride ? _ledOverride : playerLed(); }
   uint32_t _lastLedStep = 0;
   static const uint16_t LED_ANIM_MS = 2000;
   static const uint16_t LINK_LOST_MS = 3000;
