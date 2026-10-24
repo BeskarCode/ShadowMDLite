@@ -150,8 +150,84 @@ static void combo_held_toggles_once()
     CHECK(edge.update(true));
 }
 
+// --- ROS: command parser ------------------------------------------------------------------
+
+#include <string.h>
+
+static void parses_foot()
+{
+    RosCmd c = parseRosCommand("ROS:FOOT:30,-20");
+    CHECK(c.kind == ROS_FOOT);
+    CHECK(c.a == 30 && c.b == -20);
+}
+
+static void parses_auto_and_dome()
+{
+    CHECK(parseRosCommand("ROS:AUTO:0").kind == ROS_AUTO_OFF);
+    CHECK(parseRosCommand("ROS:AUTO:?").kind == ROS_AUTO_QUERY);
+    RosCmd c = parseRosCommand("ROS:DOME:-40");
+    CHECK(c.kind == ROS_DOME && c.a == -40);
+}
+
+static void auto_on_from_pi_is_an_error()
+{
+    RosCmd c = parseRosCommand("ROS:AUTO:1");
+    CHECK(c.kind == ROS_ERROR);
+    CHECK(c.error && !strcmp(c.error, "ROS:AUTO only 0 or ?"));
+}
+
+static void malformed_foot_lines_are_errors()
+{
+    const char* bad[] = {"ROS:FOOT:30", "ROS:FOOT:a,b", "ROS:FOOT:30,20,5", "ROS:FOOT:99999,0",
+                         "ROS:FOOT:", "ROS:FOOT:128,0", "ROS:FOOT:30,", "ROS:DOME:", "ROS:DOME:5x"};
+    for (unsigned i = 0; i < sizeof(bad) / sizeof(bad[0]); i++)
+    {
+        RosCmd c = parseRosCommand(bad[i]);
+        if (c.kind != ROS_ERROR) printf("  not an error: %s\n", bad[i]);
+        CHECK(c.kind == ROS_ERROR && c.error);
+    }
+}
+
+static void unknown_ros_command_is_an_error()
+{
+    CHECK(parseRosCommand("ROS:JUMP:1").kind == ROS_ERROR);
+}
+
+static void non_ros_lines_pass_through()
+{
+    CHECK(parseRosCommand("MD:12").kind == ROS_NONE);
+    CHECK(parseRosCommand("DM:30").kind == ROS_NONE);
+    CHECK(parseRosCommand("PING").kind == ROS_NONE);
+}
+
+static void reason_names()
+{
+    CHECK(!strcmp(reasonName(FA_BOOT), "boot"));
+    CHECK(!strcmp(reasonName(FA_BUTTON), "button"));
+    CHECK(!strcmp(reasonName(FA_STICK), "stick"));
+    CHECK(!strcmp(reasonName(FA_CONTROLLER), "controller"));
+    CHECK(!strcmp(reasonName(FA_PI), "pi"));
+}
+
+static void rate_limit_once_per_second()
+{
+    uint32_t last = (uint32_t)0 - (uint32_t)1000;
+    CHECK(rateLimitAllows(last, 0, 1000));
+    CHECK(!rateLimitAllows(last, 500, 1000));
+    CHECK(rateLimitAllows(last, 1000, 1000));
+}
+
 int main()
 {
+    parses_foot();
+    parses_auto_and_dome();
+    auto_on_from_pi_is_an_error();
+    malformed_foot_lines_are_errors();
+    unknown_ros_command_is_an_error();
+    non_ros_lines_pass_through();
+    reason_names();
+    rate_limit_once_per_second();
+
     starts_off_from_boot();
     toggle_turns_on_and_off_with_button_reason();
     turn_off_when_off_returns_false();

@@ -150,4 +150,110 @@ private:
     bool was;
 };
 
+// --- ROS: commands ------------------------------------------------------------------------
+//
+//   ROS:FOOT:<drive>,<turn>   feet, each -127..127 (FootAuto clamps them to its limits)
+//   ROS:AUTO:0                switch the mode off (the Pi cannot switch it on)
+//   ROS:AUTO:?                ask for the state
+//   ROS:DOME:<speed>          dome, -127..127, same as DM:
+//
+// Exact upper case: these come from software. Nothing may follow the last number.
+
+enum RosCmdKind : uint8_t { ROS_NONE, ROS_FOOT, ROS_AUTO_OFF, ROS_AUTO_QUERY, ROS_DOME, ROS_ERROR };
+
+struct RosCmd
+{
+    RosCmdKind kind;
+    int a;               // ROS_FOOT: drive, ROS_DOME: speed
+    int b;               // ROS_FOOT: turn
+    const char* error;   // ROS_ERROR: what was wrong, without the "ERR " prefix
+};
+
+inline bool rosSkipPrefix(const char*& p, const char* prefix)
+{
+    const char* q = p;
+    while (*prefix)
+    {
+        if (*q != *prefix) return false;
+        q++;
+        prefix++;
+    }
+    p = q;
+    return true;
+}
+
+// Signed integer from -127 to 127; advances p past it.
+inline bool rosReadSpeed(const char*& p, int& out)
+{
+    bool negative = false;
+    if (*p == '-' || *p == '+')
+    {
+        negative = (*p == '-');
+        p++;
+    }
+    if (*p < '0' || *p > '9') return false;
+    int v = 0;
+    while (*p >= '0' && *p <= '9')
+    {
+        v = v * 10 + (*p - '0');
+        if (v > 127) return false;      // also keeps a 16-bit int from overflowing
+        p++;
+    }
+    out = negative ? -v : v;
+    return true;
+}
+
+inline RosCmd rosCmd(RosCmdKind kind, int a = 0, int b = 0, const char* error = 0)
+{
+    RosCmd c = {kind, a, b, error};
+    return c;
+}
+
+inline RosCmd parseRosCommand(const char* line)
+{
+    const char* p = line;
+    if (!rosSkipPrefix(p, "ROS:")) return rosCmd(ROS_NONE);
+
+    if (rosSkipPrefix(p, "FOOT:"))
+    {
+        int drive, turn;
+        if (rosReadSpeed(p, drive) && *p == ',' && rosReadSpeed(++p, turn) && *p == '\0')
+            return rosCmd(ROS_FOOT, drive, turn);
+        return rosCmd(ROS_ERROR, 0, 0, "ROS:FOOT needs <drive>,<turn> from -127 to 127");
+    }
+    if (rosSkipPrefix(p, "AUTO:"))
+    {
+        if (p[0] == '0' && p[1] == '\0') return rosCmd(ROS_AUTO_OFF);
+        if (p[0] == '?' && p[1] == '\0') return rosCmd(ROS_AUTO_QUERY);
+        return rosCmd(ROS_ERROR, 0, 0, "ROS:AUTO only 0 or ?");
+    }
+    if (rosSkipPrefix(p, "DOME:"))
+    {
+        int speed;
+        if (rosReadSpeed(p, speed) && *p == '\0') return rosCmd(ROS_DOME, speed);
+        return rosCmd(ROS_ERROR, 0, 0, "ROS:DOME needs a speed from -127 to 127");
+    }
+    return rosCmd(ROS_ERROR, 0, 0, "unknown ROS: command");
+}
+
+inline const char* reasonName(FootAutoReason r)
+{
+    switch (r)
+    {
+        case FA_BUTTON:     return "button";
+        case FA_STICK:      return "stick";
+        case FA_CONTROLLER: return "controller";
+        case FA_PI:         return "pi";
+        default:            return "boot";
+    }
+}
+
+// At most once every minGapMs. Start lastMs at (now - minGapMs) so the first call passes.
+inline bool rateLimitAllows(uint32_t& lastMs, uint32_t nowMs, uint32_t minGapMs)
+{
+    if ((uint32_t)(nowMs - lastMs) < minGapMs) return false;
+    lastMs = nowMs;
+    return true;
+}
+
 #endif
