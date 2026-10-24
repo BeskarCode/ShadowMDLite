@@ -73,6 +73,38 @@ Examples:
 - `MD:30` — Open all dome panels
 - `MD:33` — Close all dome panels
 
+## ROS2D2: autonomous mode (`ENABLE_FOOT_AUTO`, `ENABLE_DOME_TRACKER`)
+
+Commands sent by the Raspberry Pi running ROS2D2 (the ROS 2 brain).
+They all start with `ROS:`, in exact upper case, so they stand apart from the console commands above.
+
+**The autonomous mode is switched on only from the controller: PS + L2 on the foot Nav.**
+The same combo switches it off, and so do touching the foot stick, losing (or a fault on) the
+foot controller, disabling the drive stick (PS + CROSS) and `ROS:AUTO:0`. After that the droid
+stays still until PS + L2 again; nothing resumes by itself. The Mega boots with the mode off.
+
+| Command | What it does | Reply |
+|---|---|---|
+| `ROS:FOOT:<drive>,<turn>` | Feet, Sabertooth units −127..127 each, clamped to `FOOT_AUTO_MAX_DRIVE` / `FOOT_AUTO_MAX_TURN` and ramped by `FOOT_AUTO_RAMP`. The feet stop if none arrives for `FOOT_AUTO_TIMEOUT_MS` (300 ms). Only in autonomous mode | None (the Pi sends ~15 a second). `ERR FOOT AUTO OFF` when the mode is off, at most once a second |
+| `ROS:AUTO:0` | Switch the autonomous mode off | `AUTO OFF pi` (or the current state if it was already off) |
+| `ROS:AUTO:?` | Ask for the state | `AUTO ON` or `AUTO OFF <reason>` |
+| `ROS:DOME:<speed>` | Dome, −127..127, clamped to `DOME_TRACKER_MAX_SPEED`. Stops after `DOME_TRACKER_TIMEOUT_MS` without one; the dome stick always wins (and holds off the tracker for `DOME_TRACKER_MANUAL_HOLD_MS`). Only in autonomous mode | None |
+| `DM:<speed>` | Same as `ROS:DOME:`, kept for the DomeTracker proof of concept | None, or `ERR Invalid DM speed` |
+
+`ROS:AUTO:1` (or anything but `0` / `?`) → `ERR ROS:AUTO only 0 or ?`: the Pi cannot switch the mode on.
+Malformed numbers, out-of-range values or extra characters → `ERR ROS:FOOT needs <drive>,<turn> from -127 to 127` (or the `ROS:DOME` equivalent), and nothing moves.
+
+The Mega also prints the state by itself every time it changes:
+
+```
+AUTO OFF boot          at start-up
+AUTO ON                PS + L2
+AUTO OFF <reason>      reason: button | stick | controller | pi
+```
+
+`FOOT_AUTO_ON_MD_FUNC` / `FOOT_AUTO_OFF_MD_FUNC` play a MarcDuino function (a sound, for example)
+when the mode goes on or off; 0 = silent.
+
 ## Replies
 
 On valid `HELP` / `PING` / `S1` / `S3` / `MD`, the firmware may print lines such as:
