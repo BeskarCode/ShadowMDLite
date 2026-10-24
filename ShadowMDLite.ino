@@ -175,6 +175,7 @@ int CustomSongMax = 8; //Total Number of Custom Songs
 #define FOOT_AUTO_MAX_TURN    30       // |ROS:FOOT: turn| clamp; keep below turnspeed (50)
 #define FOOT_AUTO_TIMEOUT_MS  300      // no ROS:FOOT: for this long -> the feet stop
 #define FOOT_AUTO_RAMP        4        // max change per Sabertooth send (every serialLatency ms)
+#define FOOT_AUTO_SILENT_MS   300      // foot Nav silent this long = lost (same as criticalFaultDetect's lag)
 #define FOOT_AUTO_ON_MD_FUNC  0        // MarcDuino function played when the mode turns on; 0 = none
 #define FOOT_AUTO_OFF_MD_FUNC 0        // ... when it turns off
 
@@ -919,10 +920,16 @@ static void playAutoSound(int mdFunc)
   if (mdFunc != 0) marcDuinoButtonPush(1, mdFunc);
 }
 
-// Switch the mode off (if it was on), tell the Pi and play the "off" sound.
+// Switch the mode off (if it was on): stop the feet right now, then tell the Pi and play
+// the "off" sound (a MarcDuino function may block for a while, so it always goes last).
+// When the stick is the reason, footMotorDrive() lets the stick drive on this same pass.
 static bool footAutoSetOff(FootAutoReason why)
 {
   if (!footAuto.turnOff(why)) return false;
+  footAuto.tick(millis());            // drop FootAuto's own pending stop: it happens here
+  ST->stop();
+  isFootMotorStopped = true;
+  footDriveSpeed = 0;
   printAutoState();
   playAutoSound(FOOT_AUTO_OFF_MD_FUNC);
   return true;
@@ -931,7 +938,8 @@ static bool footAutoSetOff(FootAutoReason why)
 // Once per loop, with the controller data already read: losing the foot Nav, and PS + L2.
 static void footAutoCheckController()
 {
-  if (!PS3NavFoot->PS3NavigationConnected)
+  if (!PS3NavFoot->PS3NavigationConnected ||
+      footControllerSilent(millis(), PS3NavFoot->getLastMessageTime(), FOOT_AUTO_SILENT_MS))
   {
     footAutoCombo.update(false);
     footAutoSetOff(FA_CONTROLLER);
@@ -1212,8 +1220,9 @@ void loop()
     {
       //We have a fault condition that we want to ensure that we do NOT process any controller data!!!
 #if ENABLE_FOOT_AUTO
-      // A faulty controller is as good as a lost one: the autonomous mode goes off
-      if (footAutoSetOff(FA_CONTROLLER)) footAuto.tick(millis());   // readUSB() already stopped the feet
+      // A faulty controller is as good as a lost one: the autonomous mode goes off and the
+      // feet stop now (readUSB() does not stop them on every fault path)
+      footAutoSetOff(FA_CONTROLLER);
 #endif
       printOutput();
       return;
@@ -1462,24 +1471,14 @@ void footMotorDrive()
                        PS3NavDome->PS3NavigationConnected))
   {
     footAutoSetOff(FA_STICK);
-    footAuto.tick(millis());          // drop its pending stop: the stick takes over now
+    // ps3FootMotorDrive() only sends after more than serialLatency ms: let it send this pass
+    previousFootMillis = millis() - serialLatency - 1;
   }
 
   if (footAuto.on())
   {
     footAutoDrive();
     return;                           // ps3FootMotorDrive() would stop the feet (stick centred)
-  }
-
-  // Just switched off for another reason: one stop, then the controller as always
-  FootOutput pending = footAuto.tick(millis());
-  if (pending.stop)
-  {
-    ST->stop();
-    isFootMotorStopped = true;
-    footDriveSpeed = 0;
-    previousFootMillis = millis();
-    return;
   }
 #endif
 

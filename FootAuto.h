@@ -134,6 +134,14 @@ inline bool footStickCancels(int hatX, int hatY, int deadzone, bool footL2Held, 
     return footAutoAbs(hatX - 128) >= deadzone || footAutoAbs(hatY - 128) >= deadzone;
 }
 
+// A Nav that has sent nothing for limitMs is as good as lost for the autonomous mode, even
+// while the Bluetooth stack still calls it connected (out of range, dying battery): its
+// stick readings are frozen, so the person cannot take over with it.
+inline bool footControllerSilent(uint32_t nowMs, uint32_t lastMessageMs, uint32_t limitMs)
+{
+    return (uint32_t)(nowMs - lastMessageMs) > limitMs;
+}
+
 // true only on the cycle a button combo goes from released to pressed.
 class ComboEdge
 {

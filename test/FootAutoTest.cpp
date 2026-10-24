@@ -141,6 +141,14 @@ static void stick_with_foot_l2_but_dome_connected_cancels()
     CHECK(footStickCancels(255, 128, 15, true, true));
 }
 
+static void silent_controller_counts_as_lost()
+{
+    CHECK(!footControllerSilent(1000, 900, 300));        // 100 ms since the last report
+    CHECK(footControllerSilent(1000, 600, 300));         // 400 ms: the link is gone
+    CHECK(!footControllerSilent(0x00000050UL, 0xFFFFFFF0UL, 300));   // 96 ms across the wrap
+    CHECK(footControllerSilent(0x00000200UL, 0xFFFFFFF0UL, 300));    // 528 ms across the wrap
+}
+
 static void combo_held_toggles_once()
 {
     ComboEdge edge;
@@ -243,6 +251,7 @@ int main()
     stick_with_foot_l2_as_dome_does_not_cancel();
     stick_with_foot_l2_but_dome_connected_cancels();
     combo_held_toggles_once();
+    silent_controller_counts_as_lost();
 
     if (failures) { printf("%d FAILED\n", failures); return 1; }
     printf("ALL PASS\n");
