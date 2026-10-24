@@ -73,10 +73,12 @@ Examples:
 - `MD:30` — Open all dome panels
 - `MD:33` — Close all dome panels
 
-## ROS2D2: autonomous mode (`ENABLE_FOOT_AUTO`, `ENABLE_DOME_TRACKER`)
+## ROS2D2: autonomous mode (`ENABLE_ROS2D2`, `ENABLE_DOME_TRACKER`)
 
 Commands sent by the Raspberry Pi running ROS2D2 (the ROS 2 brain).
 They all start with `ROS:`, in exact upper case, so they stand apart from the console commands above.
+
+**Off by default** (`#define ENABLE_ROS2D2 0`): the sketch then builds byte for byte as before and none of this exists, so droids without ROS2D2 are not affected. Set it to `1` to use it.
 
 **The autonomous mode is switched on only from the controller: PS + L2 on the foot Nav.**
 The same combo switches it off, and so do touching the foot stick, losing (or a fault on) the
