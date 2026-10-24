@@ -165,6 +165,23 @@ int CustomSongMax = 8; //Total Number of Custom Songs
 #define DOME_TRACKER_TIMEOUT_MS      300
 #define DOME_TRACKER_MANUAL_HOLD_MS  2000
 
+// Autonomous mode (ROS2D2): PS + L2 on the foot Nav switches it on and off. While on, the
+// Raspberry Pi drives the feet with ROS:FOOT:<drive>,<turn> and the dome tracker may move
+// the dome (ROS:DOME: or DM:). Touching the foot stick, losing the foot controller or
+// ROS:AUTO:0 from the Pi switch it off; then the droid stays still until PS + L2 again.
+// The Pi can never switch it on. 0 = off: the sketch builds exactly as before.
+#define ENABLE_FOOT_AUTO 1
+#define FOOT_AUTO_MAX_DRIVE   40       // |ROS:FOOT: drive| clamp; keep below drivespeed1 (70)
+#define FOOT_AUTO_MAX_TURN    30       // |ROS:FOOT: turn| clamp; keep below turnspeed (50)
+#define FOOT_AUTO_TIMEOUT_MS  300      // no ROS:FOOT: for this long -> the feet stop
+#define FOOT_AUTO_RAMP        4        // max change per Sabertooth send (every serialLatency ms)
+#define FOOT_AUTO_ON_MD_FUNC  0        // MarcDuino function played when the mode turns on; 0 = none
+#define FOOT_AUTO_OFF_MD_FUNC 0        // ... when it turns off
+
+#if ENABLE_FOOT_AUTO && !ENABLE_PC_TO_MARCDUINO_FORWARDING
+#error "ENABLE_FOOT_AUTO needs ENABLE_PC_TO_MARCDUINO_FORWARDING (the Pi talks over USB serial)"
+#endif
+
 // ---------------------------------------------------------------------------------------
 //                          MarcDuino Button Settings
 // ---------------------------------------------------------------------------------------
@@ -609,6 +626,10 @@ int marcDuinoBaudRate = 9600; // Set the baud rate for the Syren motor controlle
 
 #include <Sabertooth.h>
 
+#if ENABLE_FOOT_AUTO
+#include "FootAuto.h"
+#endif
+
 // MarcDuino action table types (must be defined before Arduino IDE generates prototypes)
 typedef boolean (*ActionCheckFn)();
 struct MarcDuinoAction {
@@ -631,6 +652,11 @@ long previousDomeMillis = millis();
 int           domeTrackerSpeed = 0;        // last DM: speed from the PC
 unsigned long domeTrackerLastMs = 0;       // millis() of the last DM:
 unsigned long domeManualLastMs = 0;        // millis() of the last manual dome move
+#endif
+#if ENABLE_FOOT_AUTO
+FootAuto  footAuto(FootAutoConfig{FOOT_AUTO_MAX_DRIVE, FOOT_AUTO_MAX_TURN, FOOT_AUTO_TIMEOUT_MS, FOOT_AUTO_RAMP});
+ComboEdge footAutoCombo;                   // PS + L2 on the foot Nav
+uint32_t  footAutoErrMs = (uint32_t)0 - (uint32_t)1000;   // last "ERR FOOT AUTO OFF" (1 per second)
 #endif
 long previousFootMillis = millis();
 long previousMarcDuinoMillis = millis();
@@ -717,6 +743,9 @@ void setup()
     
     Serial.println("\r\nSystem starting up.\r\n");
     reportResetCause();
+#if ENABLE_FOOT_AUTO
+    Serial.println(F("AUTO OFF boot"));
+#endif
 
     // CAN-Bus
     #ifdef CANBUS
@@ -861,6 +890,95 @@ static inline void pcTrimRight(char* s)
   }
 }
 
+#if ENABLE_DOME_TRACKER
+// A dome speed from the PC (DM: or ROS:DOME:), clamped to DOME_TRACKER_MAX_SPEED.
+static void domeTrackerCommand(long speed)
+{
+  if (speed >  DOME_TRACKER_MAX_SPEED) speed =  DOME_TRACKER_MAX_SPEED;
+  if (speed < -DOME_TRACKER_MAX_SPEED) speed = -DOME_TRACKER_MAX_SPEED;
+  domeTrackerSpeed = (int)speed;
+  domeTrackerLastMs = millis();
+}
+#endif
+
+#if ENABLE_FOOT_AUTO
+static void printAutoState()
+{
+  if (footAuto.on())
+  {
+    Serial.println(F("AUTO ON"));
+  } else
+  {
+    Serial.print(F("AUTO OFF "));
+    Serial.println(reasonName(footAuto.lastOffReason()));
+  }
+}
+
+static void playAutoSound(int mdFunc)
+{
+  if (mdFunc != 0) marcDuinoButtonPush(1, mdFunc);
+}
+
+// Switch the mode off (if it was on), tell the Pi and play the "off" sound.
+static bool footAutoSetOff(FootAutoReason why)
+{
+  if (!footAuto.turnOff(why)) return false;
+  printAutoState();
+  playAutoSound(FOOT_AUTO_OFF_MD_FUNC);
+  return true;
+}
+
+// Once per loop, with the controller data already read: losing the foot Nav, and PS + L2.
+static void footAutoCheckController()
+{
+  if (!PS3NavFoot->PS3NavigationConnected)
+  {
+    footAutoCombo.update(false);
+    footAutoSetOff(FA_CONTROLLER);
+    return;
+  }
+  bool combo = PS3NavFoot->getButtonPress(PS) && PS3NavFoot->getButtonPress(L2);
+  if (!footAutoCombo.update(combo)) return;
+  if (footAuto.on())
+  {
+    footAutoSetOff(FA_BUTTON);
+  } else if (isStickEnabled)
+  {
+    footAuto.toggle();
+    printAutoState();
+    playAutoSound(FOOT_AUTO_ON_MD_FUNC);
+  }
+}
+
+static void handleRosCommand(const RosCmd& ros)
+{
+  switch (ros.kind)
+  {
+    case ROS_FOOT:
+      if (!footAuto.command(ros.a, ros.b, millis()) && rateLimitAllows(footAutoErrMs, millis(), 1000))
+        Serial.println(F("ERR FOOT AUTO OFF"));
+      break;
+    case ROS_AUTO_OFF:
+      if (!footAutoSetOff(FA_PI)) printAutoState();     // already off: still answer
+      break;
+    case ROS_AUTO_QUERY:
+      printAutoState();
+      break;
+    case ROS_DOME:
+#if ENABLE_DOME_TRACKER
+      domeTrackerCommand(ros.a);
+#else
+      Serial.println(F("ERR dome tracker disabled (ENABLE_DOME_TRACKER 0)"));
+#endif
+      break;
+    default:
+      Serial.print(F("ERR "));
+      Serial.println(ros.error);
+      break;
+  }
+}
+#endif
+
 static void processPCSerialLine(const char* line)
 {
   // Make a mutable copy for trimming.
@@ -935,9 +1053,19 @@ static void processPCSerialLine(const char* line)
     return;
   }
 
+#if ENABLE_FOOT_AUTO
+  // ROS2D2 commands: ROS:FOOT:, ROS:AUTO:, ROS:DOME: (see FootAuto.h)
+  RosCmd ros = parseRosCommand(p);
+  if (ros.kind != ROS_NONE)
+  {
+    handleRosCommand(ros);
+    return;
+  }
+#endif
+
 #if ENABLE_DOME_TRACKER
   // Dome tracker: DM:<speed>, -127..127, clamped to DOME_TRACKER_MAX_SPEED. Silent on success
-  // because the PC sends it ~15 times a second.
+  // because the PC sends it ~15 times a second. Same as ROS:DOME:, kept for the DomeTracker PoC.
   if ((p[0] == 'D' || p[0] == 'd') && (p[1] == 'M' || p[1] == 'm') && p[2] == ':')
   {
     char* endPtr = NULL;
@@ -947,10 +1075,7 @@ static void processPCSerialLine(const char* line)
       Serial.println(F("ERR Invalid DM speed"));
       return;
     }
-    if (speed >  DOME_TRACKER_MAX_SPEED) speed =  DOME_TRACKER_MAX_SPEED;
-    if (speed < -DOME_TRACKER_MAX_SPEED) speed = -DOME_TRACKER_MAX_SPEED;
-    domeTrackerSpeed = (int)speed;
-    domeTrackerLastMs = millis();
+    domeTrackerCommand(speed);
     return;
   }
 #endif
@@ -1086,9 +1211,17 @@ void loop()
     if ( !readUSB() )
     {
       //We have a fault condition that we want to ensure that we do NOT process any controller data!!!
+#if ENABLE_FOOT_AUTO
+      // A faulty controller is as good as a lost one: the autonomous mode goes off
+      if (footAutoSetOff(FA_CONTROLLER)) footAuto.tick(millis());   // readUSB() already stopped the feet
+#endif
       printOutput();
       return;
     }
+
+#if ENABLE_FOOT_AUTO
+    footAutoCheckController();
+#endif
 
 #if ENABLE_PC_TO_MARCDUINO_FORWARDING
     processPCSerial();
@@ -1319,11 +1452,60 @@ void footMotorDrive()
 {
 
   //Flood control prevention
-  if ((millis() - previousFootMillis) < serialLatency) return;  
-  
+  if ((millis() - previousFootMillis) < serialLatency) return;
+
+#if ENABLE_FOOT_AUTO
+  // Touching the foot stick ends the autonomous mode, and the stick drives in this same cycle
+  if (footAuto.on() && PS3NavFoot->PS3NavigationConnected &&
+      footStickCancels(PS3NavFoot->getAnalogHat(LeftHatX), PS3NavFoot->getAnalogHat(LeftHatY),
+                       joystickFootDeadZoneRange, PS3NavFoot->getButtonPress(L2),
+                       PS3NavDome->PS3NavigationConnected))
+  {
+    footAutoSetOff(FA_STICK);
+    footAuto.tick(millis());          // drop its pending stop: the stick takes over now
+  }
+
+  if (footAuto.on())
+  {
+    footAutoDrive();
+    return;                           // ps3FootMotorDrive() would stop the feet (stick centred)
+  }
+
+  // Just switched off for another reason: one stop, then the controller as always
+  FootOutput pending = footAuto.tick(millis());
+  if (pending.stop)
+  {
+    ST->stop();
+    isFootMotorStopped = true;
+    footDriveSpeed = 0;
+    previousFootMillis = millis();
+    return;
+  }
+#endif
+
   if (PS3NavFoot->PS3NavigationConnected) ps3FootMotorDrive(PS3NavFoot);
-  
-}  
+
+}
+
+#if ENABLE_FOOT_AUTO
+// The feet as the Pi asks (ROS:FOOT:), through FootAuto's clamp, ramp and timeout
+void footAutoDrive()
+{
+  FootOutput o = footAuto.tick(millis());
+  if (o.send)
+  {
+    ST->turn(o.turn * invertTurnDirection);
+    ST->drive(o.drive * invertDriveDirection);
+    isFootMotorStopped = false;
+  } else if (o.stop)
+  {
+    ST->stop();
+    isFootMotorStopped = true;
+    footDriveSpeed = 0;
+  }
+  previousFootMillis = millis();
+}
+#endif
 
 
 // =======================================================================================
@@ -1402,7 +1584,11 @@ bool domeTrackerActive()
 {
   unsigned long now = millis();
   return (now - domeTrackerLastMs) < DOME_TRACKER_TIMEOUT_MS
-      && (now - domeManualLastMs) >= DOME_TRACKER_MANUAL_HOLD_MS;
+      && (now - domeManualLastMs) >= DOME_TRACKER_MANUAL_HOLD_MS
+#if ENABLE_FOOT_AUTO
+      && footAuto.on()                // the dome follows faces only in autonomous mode
+#endif
+      ;
 }
 
 int domeTrackerOverride(int manualSpeed)
@@ -1478,6 +1664,9 @@ void ps3ToggleSettings(PS3BT* myPS3 = PS3NavFoot)
         isFootMotorStopped = true;
         isStickEnabled = false;
         footDriveSpeed = 0;
+#if ENABLE_FOOT_AUTO
+        footAutoSetOff(FA_BUTTON);    // a parked droid is not autonomous either
+#endif
     }
     
     if(myPS3->getButtonPress(PS) && myPS3->getButtonClick(CIRCLE))
