@@ -85,4 +85,4 @@ Do not take this to an event until you have driven it in your workshop.
 
 ## Credit
 
-Original Shadow MD by Eebel, from https://github.com/Eebel/SHADOW_MD_EEBEL, built on KnightShade's SHADOW. The controller abstraction and the Joy-Con support come from the work on ShadowMD Lite, https://github.com/Fernando-Beltran/ShadowMDLite
+Original Shadow MD by Eebel, from https://github.com/Eebel/SHADOW_MD_EEBEL, built on KnightShade's SHADOW. The controller abstraction and the Joy-Con support come from the work on ShadowMD Lite, https://github.com/BeskarCode/ShadowMDLite
