@@ -2,10 +2,12 @@
 // so it can be tested on a PC (test/run_tests.sh).
 //
 // The mode is switched on only from the controller (PS + L2 on the foot Nav). While it
-// is on, the Raspberry Pi drives the feet with ROS:FOOT:<drive>,<turn> and the dome
-// tracker may move the dome. The foot stick, the same combo, losing the controller or
-// the Pi (ROS:AUTO:0) switch it off, and then the droid stays still until it is
-// switched on again from the controller.
+// is on, the Raspberry Pi drives the feet with ROS:FOOT:<drive>,<turn>. The foot stick,
+// the same combo, losing the controller or the Pi (ROS:AUTO:0) switch it off, and then
+// the droid stays still until it is switched on again from the controller.
+//
+// Face tracking (the dome follows faces) is a mode of its own, DomeTrack, switched with
+// PS + L2 on the dome Nav: the dome can look at people while the feet stay still.
 //
 // Times are uint32_t on purpose: millis() is 32 bits on the Mega, and the unsigned
 // subtraction keeps the timeout right when millis() wraps after 49 days.
@@ -126,6 +128,39 @@ private:
     int drive, turn;
 };
 
+// Face tracking: whether the dome tracker (ROS:DOME: / DM:) may turn the dome. Switched on
+// only from the controller (PS + L2 on the dome Nav); the same combo, losing the dome Nav
+// or the Pi (ROS:TRACK:0) switch it off. The dome stick only pauses it for a moment, and
+// the feet's autonomous mode has nothing to do with it.
+class DomeTrack
+{
+public:
+    DomeTrack() : isOn(false), reason(FA_BOOT) {}
+
+    bool on() const { return isOn; }
+    FootAutoReason lastOffReason() const { return reason; }
+
+    // The combo: off -> on, on -> off (reason: button).
+    void toggle()
+    {
+        if (isOn) turnOff(FA_BUTTON);
+        else isOn = true;
+    }
+
+    // false if it was already off.
+    bool turnOff(FootAutoReason why)
+    {
+        if (!isOn) return false;
+        isOn = false;
+        reason = why;
+        return true;
+    }
+
+private:
+    bool isOn;
+    FootAutoReason reason;
+};
+
 // Is the foot stick being used? Out of the dead zone on either axis, except when the
 // foot L2 is held with no dome controller: then the foot stick is turning the dome.
 inline bool footStickCancels(int hatX, int hatY, int deadzone, bool footL2Held, bool domeConnected)
@@ -164,10 +199,13 @@ private:
 //   ROS:AUTO:0                switch the mode off (the Pi cannot switch it on)
 //   ROS:AUTO:?                ask for the state
 //   ROS:DOME:<speed>          dome, -127..127, same as DM:
+//   ROS:TRACK:0               switch face tracking off (the Pi cannot switch it on)
+//   ROS:TRACK:?               ask for the state
 //
 // Exact upper case: these come from software. Nothing may follow the last number.
 
-enum RosCmdKind : uint8_t { ROS_NONE, ROS_FOOT, ROS_AUTO_OFF, ROS_AUTO_QUERY, ROS_DOME, ROS_ERROR };
+enum RosCmdKind : uint8_t { ROS_NONE, ROS_FOOT, ROS_AUTO_OFF, ROS_AUTO_QUERY, ROS_DOME,
+                           ROS_TRACK_OFF, ROS_TRACK_QUERY, ROS_ERROR };
 
 struct RosCmd
 {
@@ -234,6 +272,12 @@ inline RosCmd parseRosCommand(const char* line)
         if (p[0] == '0' && p[1] == '\0') return rosCmd(ROS_AUTO_OFF);
         if (p[0] == '?' && p[1] == '\0') return rosCmd(ROS_AUTO_QUERY);
         return rosCmd(ROS_ERROR, 0, 0, "ROS:AUTO only 0 or ?");
+    }
+    if (rosSkipPrefix(p, "TRACK:"))
+    {
+        if (p[0] == '0' && p[1] == '\0') return rosCmd(ROS_TRACK_OFF);
+        if (p[0] == '?' && p[1] == '\0') return rosCmd(ROS_TRACK_QUERY);
+        return rosCmd(ROS_ERROR, 0, 0, "ROS:TRACK only 0 or ?");
     }
     if (rosSkipPrefix(p, "DOME:"))
     {

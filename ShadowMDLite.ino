@@ -165,13 +165,17 @@ int CustomSongMax = 8; //Total Number of Custom Songs
 #define DOME_TRACKER_TIMEOUT_MS      300
 #define DOME_TRACKER_MANUAL_HOLD_MS  2000
 
-// Autonomous mode (ROS2D2): PS + L2 on the foot Nav switches it on and off. While on, the
-// Raspberry Pi drives the feet with ROS:FOOT:<drive>,<turn> and the dome tracker may move
-// the dome (ROS:DOME: or DM:). Touching the foot stick, losing the foot controller or
-// ROS:AUTO:0 from the Pi switch it off; then the droid stays still until PS + L2 again.
-// The Pi can never switch it on. 0 = off: the sketch builds exactly as before.
-// Off by default, so existing droids (and the DomeTracker PoC, whose DM: would then need
-// PS + L2 first) keep working unchanged. Set it to 1 to use ROS2D2's autonomous mode.
+// ROS2D2 adds two modes, each switched on and off only from a controller:
+//  - Autonomous mode: PS + L2 on the foot Nav. While on, the Raspberry Pi drives the feet
+//    with ROS:FOOT:<drive>,<turn>. Touching the foot stick, losing the foot controller or
+//    ROS:AUTO:0 from the Pi switch it off; then the feet stay still until PS + L2 again.
+//  - Face tracking: PS + L2 on the dome Nav. While on, the dome tracker may turn the dome
+//    (ROS:DOME: or DM:); the dome stick pauses it for DOME_TRACKER_MANUAL_HOLD_MS. Losing
+//    the dome controller or ROS:TRACK:0 from the Pi switch it off. Needs a dome Nav.
+// The two are independent: the dome can follow faces while the feet stay put, and the
+// other way round. The Pi can never switch either on. 0 = off: the sketch builds exactly
+// as before. Off by default, so existing droids (and the DomeTracker PoC, whose DM: would
+// then need PS + L2 on the dome Nav first) keep working unchanged.
 #define ENABLE_ROS2D2 0
 #define FOOT_AUTO_MAX_DRIVE   40       // |ROS:FOOT: drive| clamp; keep below drivespeed1 (70)
 #define FOOT_AUTO_MAX_TURN    30       // |ROS:FOOT: turn| clamp; keep below turnspeed (50)
@@ -660,6 +664,8 @@ unsigned long domeManualLastMs = 0;        // millis() of the last manual dome m
 FootAuto  footAuto(FootAutoConfig{FOOT_AUTO_MAX_DRIVE, FOOT_AUTO_MAX_TURN, FOOT_AUTO_TIMEOUT_MS, FOOT_AUTO_RAMP});
 ComboEdge footAutoCombo;                   // PS + L2 on the foot Nav
 uint32_t  footAutoErrMs = (uint32_t)0 - (uint32_t)1000;   // last "ERR FOOT AUTO OFF" (1 per second)
+DomeTrack domeTrack;                       // face tracking: may the dome tracker turn the dome
+ComboEdge domeTrackCombo;                  // PS + L2 on the dome Nav
 #endif
 long previousFootMillis = millis();
 long previousMarcDuinoMillis = millis();
@@ -748,6 +754,7 @@ void setup()
     reportResetCause();
 #if ENABLE_ROS2D2
     Serial.println(F("AUTO OFF boot"));
+    Serial.println(F("TRACK OFF boot"));
 #endif
 
     // CAN-Bus
@@ -960,6 +967,43 @@ static void footAutoCheckController()
   }
 }
 
+static void printTrackState()
+{
+  if (domeTrack.on())
+  {
+    Serial.println(F("TRACK ON"));
+  } else
+  {
+    Serial.print(F("TRACK OFF "));
+    Serial.println(reasonName(domeTrack.lastOffReason()));
+  }
+}
+
+// Switch face tracking off (if it was on). domeDrive() stops the dome on its next pass,
+// because domeTrackerActive() no longer lets the tracker's speed through.
+static bool domeTrackSetOff(FootAutoReason why)
+{
+  if (!domeTrack.turnOff(why)) return false;
+  printTrackState();
+  return true;
+}
+
+// Once per loop, like footAutoCheckController(): losing the dome Nav, and PS + L2 on it.
+static void domeTrackCheckController()
+{
+  if (!PS3NavDome->PS3NavigationConnected ||
+      footControllerSilent(millis(), PS3NavDome->getLastMessageTime(), FOOT_AUTO_SILENT_MS))
+  {
+    domeTrackCombo.update(false);
+    domeTrackSetOff(FA_CONTROLLER);
+    return;
+  }
+  bool combo = PS3NavDome->getButtonPress(PS) && PS3NavDome->getButtonPress(L2);
+  if (!domeTrackCombo.update(combo)) return;
+  domeTrack.toggle();
+  printTrackState();
+}
+
 static void handleRosCommand(const RosCmd& ros)
 {
   switch (ros.kind)
@@ -973,6 +1017,12 @@ static void handleRosCommand(const RosCmd& ros)
       break;
     case ROS_AUTO_QUERY:
       printAutoState();
+      break;
+    case ROS_TRACK_OFF:
+      if (!domeTrackSetOff(FA_PI)) printTrackState();   // already off: still answer
+      break;
+    case ROS_TRACK_QUERY:
+      printTrackState();
       break;
     case ROS_DOME:
 #if ENABLE_DOME_TRACKER
@@ -1223,8 +1273,10 @@ void loop()
       //We have a fault condition that we want to ensure that we do NOT process any controller data!!!
 #if ENABLE_ROS2D2
       // A faulty controller is as good as a lost one: the autonomous mode goes off and the
-      // feet stop now (readUSB() does not stop them on every fault path)
+      // feet stop now (readUSB() does not stop them on every fault path). Face tracking
+      // goes off too: nobody should have to chase a dome that turns on its own after a fault.
       footAutoSetOff(FA_CONTROLLER);
+      domeTrackSetOff(FA_CONTROLLER);
 #endif
       printOutput();
       return;
@@ -1232,6 +1284,7 @@ void loop()
 
 #if ENABLE_ROS2D2
     footAutoCheckController();
+    domeTrackCheckController();
 #endif
 
 #if ENABLE_PC_TO_MARCDUINO_FORWARDING
@@ -1587,7 +1640,7 @@ bool domeTrackerActive()
   return (now - domeTrackerLastMs) < DOME_TRACKER_TIMEOUT_MS
       && (now - domeManualLastMs) >= DOME_TRACKER_MANUAL_HOLD_MS
 #if ENABLE_ROS2D2
-      && footAuto.on()                // the dome follows faces only in autonomous mode
+      && domeTrack.on()               // the dome follows faces only with face tracking on
 #endif
       ;
 }
