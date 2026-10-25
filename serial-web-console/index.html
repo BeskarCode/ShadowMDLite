@@ -261,6 +261,15 @@
       vertical-align: top;
       border-radius: 8px;
     }
+    /* R2 in 3D (r2view3d.js) in place of the flat blueprint */
+    .r2view { position: relative; width: 100%; aspect-ratio: 0.812; border-radius: 8px; overflow: hidden; }
+    .r2view canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+    .r2view-tools { position: absolute; left: 8px; right: 8px; top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+    .r2view-tools button { font-size: 0.72rem; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border);
+                           background: rgba(22, 27, 34, 0.85); color: var(--text); cursor: pointer; }
+    .r2view-tools button.on { background: var(--ok); border-color: var(--ok); color: #0d1117; }
+    .r2view-credit { position: absolute; left: 8px; right: 8px; bottom: 6px; font-size: 0.6rem; color: var(--muted); }
+    .r2view-credit a { color: var(--muted); }
     .hotspots {
       position: absolute;
       left: 0;
@@ -446,7 +455,9 @@
     <h2 data-i18n="h2Blueprint">R2-D2 blueprint · image-based calibration</h2>
     <div class="blueprint-layout">
       <div class="blueprint-stage" id="blueprintStage">
+        <div class="r2view" id="r2view"><canvas aria-label="R2-D2 in 3D: click a numbered marker to pick the zone"></canvas></div>
         <img
+          style="display:none"
           src="r2d2plans.png"
           alt=""
           data-i18n-alt="blueprintAlt"
@@ -456,7 +467,7 @@
           loading="lazy"
           onerror="this.onerror=null;this.src='https://i.pinimg.com/736x/3a/e4/e9/3ae4e912e7e105efa20555f5736e9c3d.jpg';"
         />
-        <div class="hotspots" id="hotspots" aria-hidden="true"></div>
+        <div class="hotspots" id="hotspots" aria-hidden="true" style="display:none"></div>
       </div>
       <div class="blueprint-controls">
         <label for="zoneSelect" data-i18n="labelZoneSelect">Active zone</label>
@@ -513,6 +524,11 @@
   </div>
 
   <script src="i18n.js"></script>
+  <script src="vendor/three-r147/three.min.js"></script>
+  <script src="vendor/three-r147/GLTFLoader.js"></script>
+  <script src="vendor/three-r147/OrbitControls.js"></script>
+  <script src="vendor/three-r147/RoomEnvironment.js"></script>
+  <script src="vendor/r2d2-model.js"></script>
   <script>
     /**
      * ShadowMD: body → prefijo S3:, dome/holos → S1: (ver combo serialTarget / inferSerialTargetFromZone).
@@ -868,6 +884,7 @@
         const payload = withRoute + lineEnding();
         await writer.write(payload);
         appendLog("→ ", JSON.stringify(payload));
+        if (window.R2View3D) window.R2View3D.onCommand(withRoute);
       }
 
       async function sendCommand() {
@@ -1180,6 +1197,7 @@
           if (prev && prev.id) persistPwmRangeForZoneFromInputs(prev);
         }
         selectedZoneIndex = index;
+        if (window.R2View3D) window.R2View3D.setSelected(index);
         $("zoneSelect").value = String(index);
         const z = getCurrentZone();
         const inferredTarget = z && z.target ? z.target : inferSerialTargetFromZone(z);
@@ -1252,6 +1270,15 @@
         });
       }
 
+      // What the 3D view (r2view3d.js) needs from the console
+      window.R2Console = {
+        zones: R2_BLUEPRINT_ZONES,
+        selectZone: (i) => selectZone(i),
+        selected: () => selectedZoneIndex,
+        label: (z) => zoneDisplayLabel(z),
+        lang: () => uiLang,
+      };
+
       $("zoneSelect").addEventListener("change", () => {
         selectZone(parseInt($("zoneSelect").value, 10) || 0);
       });
@@ -1319,6 +1346,8 @@
         uiLang = $("uiLang").value === "es" ? "es" : "en";
         localStorage.setItem(LANG_KEY, uiLang);
         applyUiLanguage();
+        window.dispatchEvent(new Event("r2-lang"));      // the 3D view relabels its buttons
+        if (window.R2View3D) window.R2View3D.setSelected(selectedZoneIndex);
       });
 
       $("btnConnect").addEventListener("click", openPort);
@@ -1330,5 +1359,6 @@
       });
     })();
   </script>
+  <script src="r2view3d.js"></script>
 </body>
 </html>
