@@ -46,9 +46,9 @@
   const COLOURS = { dome: "#d9603b", holo: "#4a7fc1", body: "#5fa58f" };
 
   const TXT = {
-    en: { move: "Move marker", moving: "Click on R2 to place it", export: "Export", copied: "Copied to the clipboard",
+    en: { edit: "Edit marker positions", move: "Move marker", moving: "Click on R2 to place it", export: "Export", copied: "Copied to the clipboard",
           front: "Dome to front", reset: "Reset markers", noGl: "3D not available in this browser: showing the blueprint." },
-    es: { move: "Mover punto", moving: "Haz clic en R2 para colocarlo", export: "Exportar", copied: "Copiado al portapapeles",
+    es: { edit: "Editar posición de los puntos", move: "Mover punto", moving: "Haz clic en R2 para colocarlo", export: "Exportar", copied: "Copiado al portapapeles",
           front: "Dome al frente", reset: "Restaurar puntos", noGl: "3D no disponible en este navegador: se muestra el plano." },
   };
   const t = (k) => (TXT[(window.R2Console && window.R2Console.lang()) || "en"] || TXT.en)[k];
@@ -422,8 +422,12 @@
   function buildTools(box) {
     const bar = document.createElement("div");
     bar.className = "r2view-tools";
-    bar.innerHTML = '<button type="button" id="r2front"></button><button type="button" id="r2move"></button>' +
-                    '<button type="button" id="r2export"></button><button type="button" id="r2reset"></button>';
+    // Marker editing (move, export, reset) is hidden behind the pencil: it is only needed
+    // when fitting the markers to a new model or droid
+    bar.innerHTML = '<button type="button" id="r2front"></button>' +
+                    '<button type="button" id="r2edit" class="icon">&#9998;</button>' +
+                    '<span id="r2edittools" hidden><button type="button" id="r2move"></button>' +
+                    '<button type="button" id="r2export"></button><button type="button" id="r2reset"></button></span>';
     box.appendChild(bar);
     const credit = document.createElement("div");
     credit.className = "r2view-credit";
@@ -433,10 +437,17 @@
       document.getElementById("r2front").textContent = t("front");
       document.getElementById("r2export").textContent = t("export");
       document.getElementById("r2reset").textContent = t("reset");
+      document.getElementById("r2edit").title = t("edit");
       setMoving(moving);
     };
     texts();
     document.getElementById("r2front").addEventListener("click", () => { angle = 0; speed = 0; });
+    document.getElementById("r2edit").addEventListener("click", () => {
+      const tools = document.getElementById("r2edittools");
+      tools.hidden = !tools.hidden;
+      document.getElementById("r2edit").classList.toggle("on", !tools.hidden);
+      if (tools.hidden) setMoving(false);
+    });
     document.getElementById("r2move").addEventListener("click", () => setMoving(!moving));
     document.getElementById("r2export").addEventListener("click", async () => {
       const json = JSON.stringify(loadStored(), null, 1);
