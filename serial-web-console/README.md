@@ -25,7 +25,8 @@
 | File | Purpose |
 |------|---------|
 | `shadowmd-lite.svg` | **ShadowMD Lite** logo |
-| `logo.png` | Astromech branding ([source](https://astromech.net/forums/images/tf_ideal/blue/misc/R2logo.png)) |
+| `astromech-spain.png` | Astromech Spain logo (white, for the dark header) |
+| `logo.png` | Astromech.net branding, no longer shown ([source](https://astromech.net/forums/images/tf_ideal/blue/misc/R2logo.png)) |
 | `screenshot-console.png` | Screenshot of the two-column UI (console + blueprint) |
 | `i18n.js` | English / Spanish strings for the UI (`index.html` loads this file) |
 | `r2d2plans.png` | Blueprint image (optional local file; falls back to a remote URL if missing) |
