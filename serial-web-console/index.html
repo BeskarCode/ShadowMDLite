@@ -1276,6 +1276,9 @@
       $("blueprintStage").addEventListener("click", (e) => {
         // Si el usuario clicó justo sobre un hotspot, déjalo que lo gestione su propio handler.
         if (e.target && e.target.closest && e.target.closest(".hotspot")) return;
+        // The 3D view handles its own clicks (pick a marker, or place one); this nearest-
+        // hotspot guess is only for the flat blueprint
+        if (e.target && e.target.closest && e.target.closest("#r2view")) return;
 
         const stage = $("blueprintStage");
         const rect = stage.getBoundingClientRect();
