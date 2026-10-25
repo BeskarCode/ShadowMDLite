@@ -158,6 +158,44 @@ static void combo_held_toggles_once()
     CHECK(edge.update(true));
 }
 
+// --- dome tracker mode (separate from the feet) ---------------------------------------------
+
+static void dome_track_starts_off_from_boot()
+{
+    DomeTrack dt;
+    CHECK(!dt.on());
+    CHECK(dt.lastOffReason() == FA_BOOT);
+}
+
+static void dome_track_toggle_turns_on_and_off_with_button_reason()
+{
+    DomeTrack dt;
+    dt.toggle();
+    CHECK(dt.on());
+    dt.toggle();
+    CHECK(!dt.on());
+    CHECK(dt.lastOffReason() == FA_BUTTON);
+}
+
+static void dome_track_turn_off_keeps_the_first_reason()
+{
+    DomeTrack dt;
+    dt.toggle();
+    CHECK(dt.turnOff(FA_CONTROLLER));
+    CHECK(!dt.turnOff(FA_PI));
+    CHECK(dt.lastOffReason() == FA_CONTROLLER);
+}
+
+static void dome_track_is_independent_of_the_feet()
+{
+    FootAuto fa = makeOn();
+    DomeTrack dt;
+    CHECK(fa.on() && !dt.on());
+    dt.toggle();
+    fa.turnOff(FA_STICK);
+    CHECK(!fa.on() && dt.on());
+}
+
 // --- ROS: command parser ------------------------------------------------------------------
 
 #include <string.h>
@@ -175,6 +213,22 @@ static void parses_auto_and_dome()
     CHECK(parseRosCommand("ROS:AUTO:?").kind == ROS_AUTO_QUERY);
     RosCmd c = parseRosCommand("ROS:DOME:-40");
     CHECK(c.kind == ROS_DOME && c.a == -40);
+}
+
+static void parses_track()
+{
+    CHECK(parseRosCommand("ROS:TRACK:0").kind == ROS_TRACK_OFF);
+    CHECK(parseRosCommand("ROS:TRACK:?").kind == ROS_TRACK_QUERY);
+}
+
+static void track_on_from_pi_is_an_error()
+{
+    const char* bad[] = {"ROS:TRACK:1", "ROS:TRACK:", "ROS:TRACK:0 "};
+    for (unsigned i = 0; i < sizeof(bad) / sizeof(bad[0]); i++)
+    {
+        RosCmd c = parseRosCommand(bad[i]);
+        CHECK(c.kind == ROS_ERROR && c.error && !strcmp(c.error, "ROS:TRACK only 0 or ?"));
+    }
 }
 
 static void auto_on_from_pi_is_an_error()
@@ -229,6 +283,8 @@ int main()
 {
     parses_foot();
     parses_auto_and_dome();
+    parses_track();
+    track_on_from_pi_is_an_error();
     auto_on_from_pi_is_an_error();
     malformed_foot_lines_are_errors();
     unknown_ros_command_is_an_error();
@@ -252,6 +308,11 @@ int main()
     stick_with_foot_l2_but_dome_connected_cancels();
     combo_held_toggles_once();
     silent_controller_counts_as_lost();
+
+    dome_track_starts_off_from_boot();
+    dome_track_toggle_turns_on_and_off_with_button_reason();
+    dome_track_turn_off_keeps_the_first_reason();
+    dome_track_is_independent_of_the_feet();
 
     if (failures) { printf("%d FAILED\n", failures); return 1; }
     printf("ALL PASS\n");
