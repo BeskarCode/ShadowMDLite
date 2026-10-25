@@ -16,7 +16,7 @@ Everything here is about replacing the PS3 Move Navigation controller, which Son
 |---|---|
 | Check my Joy-Cons connect and read correctly, without touching my droid | **`BenchTest/`** |
 | Run **ShadowMD Lite** with Joy-Cons | the main sketch at the root of this repo, **`ShadowMDLite.ino`**. Pick the controller in its `ControllerConfig.h` |
-| Run Eebel's Shadow MD with Joy-Cons instead of Navs | its own repo, **[https://github.com/Fernando-Beltran/SHADOW_MD_EEBEL](https://github.com/Fernando-Beltran/SHADOW_MD_EEBEL)**. See `JOYCON.md` there |
+| Run Eebel's Shadow MD with Joy-Cons instead of Navs | its own repo, **[https://github.com/BeskarCode/SHADOW_MD_EEBEL](https://github.com/BeskarCode/SHADOW_MD_EEBEL)**. See `JOYCON.md` there |
 | Print the button map and keep it on the bench | **`CheatSheet_JoyCon.html`** |
 
 Start with `BenchTest`. It drives nothing: no Sabertooth, no SyRen, no MarcDuino. It only reads the controllers and prints what it sees over serial. If the numbers there look right, the rest will behave.
@@ -42,7 +42,7 @@ So there is a thin interface in between. The droid logic asks "is the stick push
 
 Adding another controller means writing one more implementation, and nothing else.
 
-**About the duplicated headers.** The same `.h` files appear at the root of this repo (next to `ShadowMDLite.ino`), inside `BenchTest/`, and in the Shadow MD fork (https://github.com/Fernando-Beltran/SHADOW_MD_EEBEL). That is not an oversight: the Arduino IDE compiles the files that sit next to the sketch, so each sketch needs its own copy. They are identical. If you change one, change the other.
+**About the duplicated headers.** The same `.h` files appear at the root of this repo (next to `ShadowMDLite.ino`), inside `BenchTest/`, and in the Shadow MD fork (https://github.com/BeskarCode/SHADOW_MD_EEBEL). That is not an oversight: the Arduino IDE compiles the files that sit next to the sketch, so each sketch needs its own copy. They are identical. If you change one, change the other.
 
 ## Button map
 
@@ -122,4 +122,4 @@ Plug the Bluetooth dongle in before powering up the controllers. The library rea
 
 The Joy-Con protocol details, the subcommands and the pairing records come from **dekuNukem's** reverse engineering notes, https://github.com/dekuNukem/Nintendo_Switch_Reverse_Engineering. The note on subcommand `08` is what put us on the trail of the reconnection problem. Thank you.
 
-The Shadow MD fork (https://github.com/Fernando-Beltran/SHADOW_MD_EEBEL) is Eebel's Shadow MD, from https://github.com/Eebel/SHADOW_MD_EEBEL, itself built on KnightShade's SHADOW. None of that behaviour has been changed.
+The Shadow MD fork (https://github.com/BeskarCode/SHADOW_MD_EEBEL) is Eebel's Shadow MD, from https://github.com/Eebel/SHADOW_MD_EEBEL, itself built on KnightShade's SHADOW. None of that behaviour has been changed.
