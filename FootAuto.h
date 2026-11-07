@@ -87,6 +87,7 @@ inline RosMode modeFromName(const char* name, size_t len)
 // Mega (ROS_FLASH); ROS_COMBO_NAME_SIZE fits the longest name, DOME_RIGHT_L2_CIRCLE.
 const int ROS_COMBO_COUNT = 61;
 const int ROS_COMBO_NAME_SIZE = 21;
+const int ROS_FIRST_DOME_COMBO = 25;   // DOME_UP: from here on the arrow is on the dome Nav
 static const char ROS_COMBO_NAMES[ROS_COMBO_COUNT][ROS_COMBO_NAME_SIZE] ROS_FLASH = {
     "FOOT_PS_L2",
     "FOOT_UP", "FOOT_UP_CROSS", "FOOT_UP_CIRCLE", "FOOT_UP_L1", "FOOT_UP_PS", "FOOT_UP_L3",
@@ -347,6 +348,26 @@ public:
 
 private:
     bool was;
+};
+
+// A bound MarcDuino combo re-fires about once a second while it is held (the sketch's
+// marcDuinoButtonCounter), but a mode combo must act once per press. One latch per Nav:
+// press() is true only the first time a combo fires; release() when that Nav's arrows
+// are all up.
+class ComboLatch
+{
+public:
+    ComboLatch() : held(-1) {}
+    bool press(int c)
+    {
+        if (c == held) return false;
+        held = c;
+        return true;
+    }
+    void release() { held = -1; }
+
+private:
+    int held;
 };
 
 // --- ROS: commands ------------------------------------------------------------------------

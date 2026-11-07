@@ -389,8 +389,28 @@ static void rate_limit_once_per_second()
     CHECK(rateLimitAllows(last, 1000, 1000));
 }
 
+static void combo_latch_fires_once_per_press()
+{
+    ComboLatch l;
+    CHECK(l.press(5));                                // FOOT_UP_PS pressed
+    for (int i = 0; i < 4; i++) CHECK(!l.press(5));   // held: the ~1 s repeats are ignored
+    l.release();                                      // arrow up
+    CHECK(l.press(5));                                // pressed again: fires
+    CHECK(l.press(3));                                // another combo with the arrow still down
+    CHECK(!l.press(3));
+    CHECK(l.press(5));
+}
+
+static void first_dome_combo_is_dome_up()
+{
+    CHECK(!strcmp(ROS_COMBO_NAMES[ROS_FIRST_DOME_COMBO], "DOME_UP"));
+    CHECK(!strncmp(ROS_COMBO_NAMES[ROS_FIRST_DOME_COMBO - 1], "FOOT_", 5));
+}
+
 int main()
 {
+    combo_latch_fires_once_per_press();
+    first_dome_combo_is_dome_up();
     parses_foot();
     parses_auto_and_dome();
     parses_track();
