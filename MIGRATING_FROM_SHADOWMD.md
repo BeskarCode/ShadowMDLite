@@ -1,5 +1,7 @@
 # Migrating from Shadow MD to ShadowMDLite
 
+> ROS2D2 also works with the classic sketch ([SHADOW_MD_EEBEL](https://github.com/BeskarCode/SHADOW_MD_EEBEL)); migrate only if you want ShadowMD Lite itself.
+
 A step-by-step guide to move a droid from the classic **Shadow MD** sketch
 (`Shadow_MD_DualController_Template` and its variants, such as the Eebel tabbed one) to
 **ShadowMDLite**. You need ShadowMDLite to add [ROS2D2](https://github.com/BeskarCode/ROS2D2)

@@ -385,3 +385,5 @@ as before. `ENABLE_DOME_TRACKER` (on by default) only lets a PC or the Pi turn t
 `DM:<speed>`; it does nothing unless those commands arrive. The commands the Pi sends over USB are
 in [`PCSerialProtocol.md`](PCSerialProtocol.md) (section *ROS2D2*); the buttons in
 [`CheatSheet.md`](CheatSheet.md). ROS2D2 is still being tested on the droid.
+
+The classic Shadow MD also supports ROS2D2, in [SHADOW_MD_EEBEL](https://github.com/BeskarCode/SHADOW_MD_EEBEL).
