@@ -360,3 +360,26 @@ A **local HTML tool** in [`serial-web-console/`](serial-web-console/) uses the *
 
 ![ShadowMD Lite web serial console (USB + blueprint)](serial-web-console/2026-03-20-20-06-23.png)
 
+---
+
+## 12. Migrating from Shadow MD
+
+Coming from the classic Shadow MD sketch? [`MIGRATING_FROM_SHADOWMD.md`](MIGRATING_FROM_SHADOWMD.md)
+walks you through it step by step: back up, copy your settings and controller addresses, map your
+buttons, flash and test with the wheels in the air.
+
+---
+
+## 13. ROS2D2 (optional)
+
+[ROS2D2](https://github.com/BeskarCode/ROS2D2) adds a ROS 2 brain on a Raspberry Pi on top of
+ShadowMD Lite: the dome follows faces, and navigation modes (follow a colour, go to a point,
+and more on the way) are switched on from the controller. The Mega stays in charge of all the
+hardware: the controller always wins, and the Mega stops the feet and the dome if no command
+arrives from the Pi for 300 ms.
+
+It is all behind `#define ENABLE_ROS2D2`, **off by default**: with `0`, the sketch builds exactly
+as before. `ENABLE_DOME_TRACKER` (on by default) only lets a PC or the Pi turn the dome with
+`DM:<speed>`; it does nothing unless those commands arrive. The commands the Pi sends over USB are
+in [`PCSerialProtocol.md`](PCSerialProtocol.md) (section *ROS2D2*); the buttons in
+[`CheatSheet.md`](CheatSheet.md). ROS2D2 is still being tested on the droid.
