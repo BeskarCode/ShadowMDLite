@@ -1833,7 +1833,12 @@ void ps3ToggleSettings(DroidPad* myPS3 = PS3NavFoot)
     // Enable and Disable Overspeed
     // A Joy-Con has no L3, so there the toggle is stick click + ZL (PS + L2 to the sketch)
     #ifdef USE_JOYCON
+    // With ROS2D2, PS + L2 belongs to its mode when one is bound (bindings.modeFor(0)): no overspeed toggle
+    #if ENABLE_ROS2D2
+    if (myPS3->getButtonPress(PS) && myPS3->getButtonPress(L2) && isStickEnabled && bindings.modeFor(0) == MODE_NONE)
+    #else
     if (myPS3->getButtonPress(PS) && myPS3->getButtonPress(L2) && isStickEnabled)
+    #endif
     #else
     if (myPS3->getButtonPress(L3) && myPS3->getButtonPress(L1) && isStickEnabled)
     #endif

@@ -21,6 +21,8 @@ ShadowMD Lite can run with a single Nintendo Switch Joy-Con in each hand instead
 
 **What changes with Joy-Cons:** a Joy-Con has no L3, so the over speed toggle moves from `L3 + L1` to **stick click + ZL**, and the cross controller `dome arrow + foot L3` combos cannot be reached. In the stock map only one of those is assigned: **Up + L3, function 90 (random sounds, `$R`)**; move it to a free combo if you use it. Full button map, pairing steps and a bench test sketch that drives nothing are in [`JoyCon/`](JoyCon/README.md).
 
+**With ROS2D2:** if foot PS + L2 is bound to a mode, it switches that mode and the over speed toggle does not fire.
+
 | Build, Arduino Mega ADK | Flash | RAM |
 |---|---|---|
 **Pairing needs no re-upload.** On the first boot the droid opens a pairing session by itself: hold the sync button on the left Joy-Con until it vibrates, then on the right one. Every day after that, press any button on each Joy-Con and it calls the droid back. To pair again, hold **Minus + Capture** (left) or **Plus + Home** (right) for 5 seconds, reset the Mega three times in a row, or press **Pair Joy-Con** in the web console (it sends `JOYPAIR`). Each step plays an R2 sound, set in `ControllerConfig.h`. The whole guide, including what to do with a Joy-Con that has been used on a Switch, is in [`JoyCon/README.md`](JoyCon/README.md#pairing).
