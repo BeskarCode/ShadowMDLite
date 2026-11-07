@@ -165,10 +165,14 @@ int CustomSongMax = 8; //Total Number of Custom Songs
 #define DOME_TRACKER_TIMEOUT_MS      300
 #define DOME_TRACKER_MANUAL_HOLD_MS  2000
 
-// ROS2D2 adds two modes, each switched on and off only from a controller:
-//  - Autonomous mode: PS + L2 on the foot Nav. While on, the Raspberry Pi drives the feet
-//    with ROS:FOOT:<drive>,<turn>. Touching the foot stick, losing the foot controller or
-//    ROS:AUTO:0 from the Pi switch it off; then the feet stay still until PS + L2 again.
+// ROS2D2 adds two kinds of mode, each switched on only from a controller:
+//  - Autonomous modes (goto, forward, patrol, follow): each one is switched on by a controller
+//    combo (by default PS + L2 on the foot Nav -> goto; the Pi assigns others with
+//    ROS:BIND:<COMBO>,<mode>, and an assigned combo no longer fires its MarcDuino function).
+//    The combo of the mode that is on switches it off; another mode's combo switches to it.
+//    While a mode is on, the Raspberry Pi drives the feet with ROS:FOOT:<drive>,<turn> and may
+//    turn the dome (ROS:DOME:). Touching the foot stick, losing the foot controller or
+//    ROS:AUTO:0 from the Pi switch it off; then the feet stay still until a mode combo again.
 //  - Face tracking: PS + L2 on the dome Nav. While on, the dome tracker may turn the dome
 //    (ROS:DOME: or DM:); the dome stick pauses it for DOME_TRACKER_MANUAL_HOLD_MS. Losing
 //    the dome controller or ROS:TRACK:0 from the Pi switch it off. Needs a dome Nav.
@@ -663,6 +667,7 @@ unsigned long domeManualLastMs = 0;        // millis() of the last manual dome m
 #if ENABLE_ROS2D2
 FootAuto  footAuto(FootAutoConfig{FOOT_AUTO_MAX_DRIVE, FOOT_AUTO_MAX_TURN, FOOT_AUTO_TIMEOUT_MS, FOOT_AUTO_RAMP});
 ComboEdge footAutoCombo;                   // PS + L2 on the foot Nav
+ComboBindings bindings;                    // which combo switches which mode on (ROS:BIND:)
 uint32_t  footAutoErrMs = (uint32_t)0 - (uint32_t)1000;   // last "ERR FOOT AUTO OFF" (1 per second)
 DomeTrack domeTrack;                       // face tracking: may the dome tracker turn the dome
 ComboEdge domeTrackCombo;                  // PS + L2 on the dome Nav
@@ -916,7 +921,8 @@ static void printAutoState()
 {
   if (footAuto.on())
   {
-    Serial.println(F("AUTO ON"));
+    Serial.print(F("AUTO ON "));
+    Serial.println(modeName(footAuto.mode()));
   } else
   {
     Serial.print(F("AUTO OFF "));
@@ -944,6 +950,23 @@ static bool footAutoSetOff(FootAutoReason why)
   return true;
 }
 
+// A mode combo was pressed (ComboBindings): off -> m on (only with the drive stick enabled,
+// as always); m on -> off; another mode on -> switch to m (FootAuto stops the feet until
+// the Pi's next ROS:FOOT:).
+static void rosModePress(RosMode m)
+{
+  if (footAuto.on() && footAuto.mode() == m)
+  {
+    footAutoSetOff(FA_BUTTON);
+    return;
+  }
+  bool wasOn = footAuto.on();
+  if (!wasOn && !isStickEnabled) return;
+  footAuto.press(m);
+  printAutoState();
+  if (!wasOn) playAutoSound(FOOT_AUTO_ON_MD_FUNC);
+}
+
 // Once per loop, with the controller data already read: losing the foot Nav, and PS + L2.
 static void footAutoCheckController()
 {
@@ -956,15 +979,8 @@ static void footAutoCheckController()
   }
   bool combo = PS3NavFoot->getButtonPress(PS) && PS3NavFoot->getButtonPress(L2);
   if (!footAutoCombo.update(combo)) return;
-  if (footAuto.on())
-  {
-    footAutoSetOff(FA_BUTTON);
-  } else if (isStickEnabled)
-  {
-    footAuto.press(MODE_GOTO);
-    printAutoState();
-    playAutoSound(FOOT_AUTO_ON_MD_FUNC);
-  }
+  RosMode m = bindings.modeFor(0);    // 0 = FOOT_PS_L2
+  if (m != MODE_NONE) rosModePress(m);
 }
 
 static void printTrackState()
@@ -1023,6 +1039,27 @@ static void handleRosCommand(const RosCmd& ros)
       break;
     case ROS_TRACK_QUERY:
       printTrackState();
+      break;
+    case ROS_BIND:
+      // bind() is also true for "none" on a combo that was not bound: still BIND OK.
+      if (bindings.bind(ros.a, (RosMode)ros.b))
+      {
+        Serial.print(F("BIND OK "));
+        Serial.print((const __FlashStringHelper*)ROS_COMBO_NAMES[ros.a]);
+        Serial.print(' ');
+        Serial.println(modeName((RosMode)ros.b));
+      } else
+      {
+        Serial.println(F("ERR BIND FULL"));
+      }
+      break;
+    case ROS_BIND_CLEAR:
+      bindings.clear();
+      Serial.println(F("BIND CLEAR"));
+      break;
+    case ROS_BIND_RESET:
+      bindings.reset();
+      Serial.println(F("BIND RESET"));
       break;
     case ROS_DOME:
 #if ENABLE_DOME_TRACKER
@@ -1640,7 +1677,7 @@ bool domeTrackerActive()
   return (now - domeTrackerLastMs) < DOME_TRACKER_TIMEOUT_MS
       && (now - domeManualLastMs) >= DOME_TRACKER_MANUAL_HOLD_MS
 #if ENABLE_ROS2D2
-      && domeTrack.on()               // the dome follows faces only with face tracking on
+      && (domeTrack.on() || footAuto.on())   // face tracking, or a mode (the Pi turns the dome)
 #endif
       ;
 }
@@ -2563,12 +2600,25 @@ static boolean checkFootDownL3()  { return counterOk() && PS3NavFoot->getButtonP
 static boolean checkFootLeftL3()  { return counterOk() && PS3NavFoot->getButtonPress(LEFT)  && PS3NavDome->PS3NavigationConnected && PS3NavDome->getButtonPress(L3); }
 static boolean checkFootRightL3() { return counterOk() && PS3NavFoot->getButtonPress(RIGHT) && PS3NavDome->PS3NavigationConnected && PS3NavDome->getButtonPress(L3); }
 
+#if ENABLE_ROS2D2
+static int comboOf(ActionCheckFn f);   // after the dome check functions
+#endif
+
 static void processMarcDuinoActions(const MarcDuinoAction* actions, uint8_t actionCount)
 {
   for (uint8_t i = 0; i < actionCount; i++)
   {
     if (actions[i].check && actions[i].check())
     {
+#if ENABLE_ROS2D2
+      // A combo assigned to a mode switches the mode instead of its MarcDuino function.
+      RosMode mode = bindings.modeFor(comboOf(actions[i].check));
+      if (mode != MODE_NONE)
+      {
+        rosModePress(mode);
+        return;
+      }
+#endif
       if (actions[i].mdFunc == 0) {
         #ifdef SHADOW_VERBOSE
           if (actions[i].verbose) { output += actions[i].verbose; output += F(" FREE\r\n"); }
@@ -2677,6 +2727,35 @@ static boolean checkDomeUpL3()    { return counterOk() && PS3NavDome->getButtonP
 static boolean checkDomeDownL3()  { return counterOk() && PS3NavDome->getButtonPress(DOWN)  && PS3NavFoot->getButtonPress(L3); }
 static boolean checkDomeLeftL3()  { return counterOk() && PS3NavDome->getButtonPress(LEFT)  && PS3NavFoot->getButtonPress(L3); }
 static boolean checkDomeRightL3() { return counterOk() && PS3NavDome->getButtonPress(RIGHT) && PS3NavFoot->getButtonPress(L3); }
+
+#if ENABLE_ROS2D2
+// The check function of every combo, in the order of ROS_COMBO_NAMES (FootAuto.h). Index 0,
+// FOOT_PS_L2, is not a MarcDuino combo: footAutoCheckController() handles it. In flash.
+static ActionCheckFn const ROS_COMBO_CHECKS[] PROGMEM = {
+  nullptr,
+  checkFootUpBase,    checkFootUpCross,    checkFootUpCircle,    checkFootUpL1,    checkFootUpPS,    checkFootUpL3,
+  checkFootDownBase,  checkFootDownCross,  checkFootDownCircle,  checkFootDownL1,  checkFootDownPS,  checkFootDownL3,
+  checkFootLeftBase,  checkFootLeftCross,  checkFootLeftCircle,  checkFootLeftL1,  checkFootLeftPS,  checkFootLeftL3,
+  checkFootRightBase, checkFootRightCross, checkFootRightCircle, checkFootRightL1, checkFootRightPS, checkFootRightL3,
+  checkDomeUpBase,    checkDomeUpCross,    checkDomeUpCircle,    checkDomeUpL1,    checkDomeUpPS,    checkDomeUpL3,
+  checkDomeUpL2,      checkDomeUpL2Cross,  checkDomeUpL2Circle,
+  checkDomeDownBase,  checkDomeDownCross,  checkDomeDownCircle,  checkDomeDownL1,  checkDomeDownPS,  checkDomeDownL3,
+  checkDomeDownL2,    checkDomeDownL2Cross, checkDomeDownL2Circle,
+  checkDomeLeftBase,  checkDomeLeftCross,  checkDomeLeftCircle,  checkDomeLeftL1,  checkDomeLeftPS,  checkDomeLeftL3,
+  checkDomeLeftL2,    checkDomeLeftL2Cross, checkDomeLeftL2Circle,
+  checkDomeRightBase, checkDomeRightCross, checkDomeRightCircle, checkDomeRightL1, checkDomeRightPS, checkDomeRightL3,
+  checkDomeRightL2,   checkDomeRightL2Cross, checkDomeRightL2Circle,
+};
+static_assert(sizeof(ROS_COMBO_CHECKS) / sizeof(ROS_COMBO_CHECKS[0]) == ROS_COMBO_COUNT, "one check per combo name");
+
+// Index of the combo (ROS_COMBO_NAMES) whose check function is f, or -1.
+static int comboOf(ActionCheckFn f)
+{
+  for (int i = 1; i < ROS_COMBO_COUNT; i++)
+    if ((ActionCheckFn)pgm_read_ptr(&ROS_COMBO_CHECKS[i]) == f) return i;
+  return -1;
+}
+#endif
 
 void marcDuinoFoot()
 {
