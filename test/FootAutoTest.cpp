@@ -1,5 +1,6 @@
 // Host tests for FootAuto.h (no Arduino needed). Run with test/run_tests.sh.
 #include <stdio.h>
+#include <string.h>
 
 #include "FootAuto.h"
 
@@ -10,7 +11,7 @@ static int failures = 0;
 static FootAuto makeOn()
 {
     FootAuto fa(FootAutoConfig{40, 30, 300, 4});
-    fa.toggle();
+    fa.press(MODE_GOTO);
     return fa;
 }
 
@@ -24,21 +25,102 @@ static void starts_off_from_boot()
     CHECK(!fa.command(10, 0, 0));
 }
 
-static void toggle_turns_on_and_off_with_button_reason()
-{
-    FootAuto fa(FootAutoConfig{40, 30, 300, 4});
-    CHECK(fa.toggle());
-    CHECK(fa.on());
-    CHECK(fa.toggle());
-    CHECK(!fa.on());
-    CHECK(fa.lastOffReason() == FA_BUTTON);
-}
-
 static void turn_off_when_off_returns_false()
 {
     FootAuto fa(FootAutoConfig{40, 30, 300, 4});
     CHECK(!fa.turnOff(FA_PI));
     CHECK(fa.lastOffReason() == FA_BOOT);
+}
+
+// --- modes and combo bindings ---------------------------------------------------------------
+
+static void press_turns_on_with_mode()
+{
+    FootAuto fa(FootAutoConfig{40, 30, 300, 4});
+    CHECK(fa.press(MODE_FOLLOW));
+    CHECK(fa.on());
+    CHECK(fa.mode() == MODE_FOLLOW);
+}
+
+static void press_same_mode_turns_off()
+{
+    FootAuto fa(FootAutoConfig{40, 30, 300, 4});
+    fa.press(MODE_FOLLOW);
+    CHECK(fa.press(MODE_FOLLOW));
+    CHECK(!fa.on());
+    CHECK(fa.lastOffReason() == FA_BUTTON);
+    CHECK(fa.mode() == MODE_NONE);
+}
+
+static void switch_mode_stops_feet()
+{
+    FootAuto fa = makeOn();
+    fa.command(40, 0, 0);
+    FootOutput o = {false, false, 0, 0};
+    for (int i = 1; i <= 5; i++) o = fa.tick(10 * i);
+    CHECK(o.send);
+    CHECK(fa.press(MODE_FOLLOW));
+    CHECK(fa.on());
+    CHECK(fa.mode() == MODE_FOLLOW);
+    o = fa.tick(60);
+    CHECK(o.stop && !o.send);
+    CHECK(fa.command(40, 0, 70));
+    o = fa.tick(80);
+    CHECK(o.send);
+}
+
+static void default_binding_is_ps_l2_goto()
+{
+    ComboBindings b;
+    b.reset();
+    CHECK(b.modeFor(comboFromName("FOOT_PS_L2", 10)) == MODE_GOTO);
+    for (int i = 1; i < ROS_COMBO_COUNT; i++) CHECK(b.modeFor(i) == MODE_NONE);
+}
+
+static void bind_replace_free_and_full()
+{
+    ComboBindings b;
+    b.clear();
+    for (int i = 0; i < 8; i++) CHECK(b.bind(i, MODE_FORWARD));
+    CHECK(!b.bind(8, MODE_FORWARD));
+    CHECK(b.bind(3, MODE_PATROL));
+    CHECK(b.modeFor(3) == MODE_PATROL);
+    CHECK(b.bind(3, MODE_NONE));
+    CHECK(b.modeFor(3) == MODE_NONE);
+    CHECK(b.bind(8, MODE_FOLLOW));
+    CHECK(b.modeFor(8) == MODE_FOLLOW);
+    CHECK(!b.bind(9, MODE_GOTO));
+}
+
+static void combo_names()
+{
+    CHECK(ROS_COMBO_COUNT == 61);
+    CHECK(!strcmp(ROS_COMBO_NAMES[0], "FOOT_PS_L2"));
+    CHECK(!strcmp(ROS_COMBO_NAMES[1], "FOOT_UP"));
+    CHECK(!strcmp(ROS_COMBO_NAMES[6], "FOOT_UP_L3"));
+    CHECK(!strcmp(ROS_COMBO_NAMES[24], "FOOT_RIGHT_L3"));
+    CHECK(!strcmp(ROS_COMBO_NAMES[25], "DOME_UP"));
+    CHECK(!strcmp(ROS_COMBO_NAMES[60], "DOME_RIGHT_L2_CIRCLE"));
+    for (int i = 0; i < ROS_COMBO_COUNT; i++)
+    {
+        CHECK(comboFromName(ROS_COMBO_NAMES[i], strlen(ROS_COMBO_NAMES[i])) == i);
+        for (int j = i + 1; j < ROS_COMBO_COUNT; j++) CHECK(strcmp(ROS_COMBO_NAMES[i], ROS_COMBO_NAMES[j]) != 0);
+    }
+    CHECK(comboFromName("DOME_LEFT_L2_CIRCLE", 19) >= 0);
+    CHECK(comboFromName("DOME_PS_L2", 10) == -1);
+    CHECK(comboFromName("FOOT_UP_PS", 5) == -1);      // length counts
+}
+
+static void mode_names()
+{
+    CHECK(!strcmp(modeName(MODE_GOTO), "goto"));
+    CHECK(!strcmp(modeName(MODE_FORWARD), "forward"));
+    CHECK(!strcmp(modeName(MODE_PATROL), "patrol"));
+    CHECK(!strcmp(modeName(MODE_FOLLOW), "follow"));
+    CHECK(!strcmp(modeName(MODE_NONE), "none"));
+    CHECK(modeFromName("follow", 6) == MODE_FOLLOW);
+    CHECK(modeFromName("none", 4) == MODE_NONE);
+    CHECK(modeFromName("fly", 3) == MODE_NONE);
 }
 
 // --- commands, ramp and timeout -----------------------------------------------------------
@@ -215,6 +297,34 @@ static void parses_auto_and_dome()
     CHECK(c.kind == ROS_DOME && c.a == -40);
 }
 
+static void parses_bind()
+{
+    RosCmd c = parseRosCommand("ROS:BIND:FOOT_UP_PS,follow");
+    CHECK(c.kind == ROS_BIND);
+    CHECK(c.a == comboFromName("FOOT_UP_PS", 10) && c.a > 0);
+    CHECK(c.b == MODE_FOLLOW);
+    c = parseRosCommand("ROS:BIND:DOME_RIGHT_L2_CIRCLE,none");
+    CHECK(c.kind == ROS_BIND && c.b == MODE_NONE && c.a == 60);
+    CHECK(parseRosCommand("ROS:BIND:CLEAR").kind == ROS_BIND_CLEAR);
+    CHECK(parseRosCommand("ROS:BIND:RESET").kind == ROS_BIND_RESET);
+}
+
+static void bind_errors()
+{
+    RosCmd c = parseRosCommand("ROS:BIND:FOO,follow");
+    CHECK(c.kind == ROS_ERROR && c.error && !strcmp(c.error, "unknown combo"));
+    c = parseRosCommand("ROS:BIND:FOOT_UP_PS,fly");
+    CHECK(c.kind == ROS_ERROR && c.error && !strcmp(c.error, "unknown mode"));
+    const char* bad[] = {"ROS:BIND:FOOT_UP_PS", "ROS:BIND:FOOT_UP_PS,follow ", "ROS:BIND:FOOT_UP_PS,follow,x",
+                         "ROS:BIND:", "ROS:BIND:CLEAR ", "ROS:BIND:FOOT_UP_PS,"};
+    for (unsigned i = 0; i < sizeof(bad) / sizeof(bad[0]); i++)
+    {
+        c = parseRosCommand(bad[i]);
+        if (c.kind != ROS_ERROR) printf("  not an error: %s\n", bad[i]);
+        CHECK(c.kind == ROS_ERROR && c.error);
+    }
+}
+
 static void parses_track()
 {
     CHECK(parseRosCommand("ROS:TRACK:0").kind == ROS_TRACK_OFF);
@@ -284,6 +394,8 @@ int main()
     parses_foot();
     parses_auto_and_dome();
     parses_track();
+    parses_bind();
+    bind_errors();
     track_on_from_pi_is_an_error();
     auto_on_from_pi_is_an_error();
     malformed_foot_lines_are_errors();
@@ -293,7 +405,13 @@ int main()
     rate_limit_once_per_second();
 
     starts_off_from_boot();
-    toggle_turns_on_and_off_with_button_reason();
+    press_turns_on_with_mode();
+    press_same_mode_turns_off();
+    switch_mode_stops_feet();
+    default_binding_is_ps_l2_goto();
+    bind_replace_free_and_full();
+    combo_names();
+    mode_names();
     turn_off_when_off_returns_false();
     command_is_clamped();
     ramp_limits_each_tick();

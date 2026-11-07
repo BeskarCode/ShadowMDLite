@@ -961,7 +961,7 @@ static void footAutoCheckController()
     footAutoSetOff(FA_BUTTON);
   } else if (isStickEnabled)
   {
-    footAuto.toggle();
+    footAuto.press(MODE_GOTO);
     printAutoState();
     playAutoSound(FOOT_AUTO_ON_MD_FUNC);
   }

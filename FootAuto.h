@@ -15,9 +15,132 @@
 #ifndef FOOT_AUTO_H
 #define FOOT_AUTO_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 enum FootAutoReason : uint8_t { FA_BOOT, FA_BUTTON, FA_STICK, FA_CONTROLLER, FA_PI };
+
+// The autonomous modes. Each one is switched on by its own controller combo (ComboBindings).
+enum RosMode : uint8_t { MODE_NONE = 0, MODE_GOTO, MODE_FORWARD, MODE_PATROL, MODE_FOLLOW };
+
+inline const char* modeName(RosMode m)
+{
+    switch (m)
+    {
+        case MODE_GOTO:    return "goto";
+        case MODE_FORWARD: return "forward";
+        case MODE_PATROL:  return "patrol";
+        case MODE_FOLLOW:  return "follow";
+        default:           return "none";
+    }
+}
+
+inline size_t rosStrLen(const char* s)
+{
+    size_t n = 0;
+    while (s[n]) n++;
+    return n;
+}
+
+// Does the name (len chars, not NUL-terminated) equal the C string lit?
+inline bool nameEquals(const char* name, size_t len, const char* lit)
+{
+    size_t i = 0;
+    for (; i < len; i++)
+        if (lit[i] == '\0' || name[i] != lit[i]) return false;
+    return lit[i] == '\0';
+}
+
+// MODE_NONE when the name is not a mode (and for "none").
+inline RosMode modeFromName(const char* name, size_t len)
+{
+    for (uint8_t m = MODE_GOTO; m <= MODE_FOLLOW; m++)
+        if (nameEquals(name, len, modeName((RosMode)m))) return (RosMode)m;
+    return MODE_NONE;
+}
+
+// Every controller combo that can start a mode. Same names and order in firmware, modes.yaml
+// and the console. Each one is a check...() function of ShadowMDLite.ino.
+const int ROS_COMBO_COUNT = 61;
+static const char* const ROS_COMBO_NAMES[ROS_COMBO_COUNT] = {
+    "FOOT_PS_L2",
+    "FOOT_UP", "FOOT_UP_CROSS", "FOOT_UP_CIRCLE", "FOOT_UP_L1", "FOOT_UP_PS", "FOOT_UP_L3",
+    "FOOT_DOWN", "FOOT_DOWN_CROSS", "FOOT_DOWN_CIRCLE", "FOOT_DOWN_L1", "FOOT_DOWN_PS", "FOOT_DOWN_L3",
+    "FOOT_LEFT", "FOOT_LEFT_CROSS", "FOOT_LEFT_CIRCLE", "FOOT_LEFT_L1", "FOOT_LEFT_PS", "FOOT_LEFT_L3",
+    "FOOT_RIGHT", "FOOT_RIGHT_CROSS", "FOOT_RIGHT_CIRCLE", "FOOT_RIGHT_L1", "FOOT_RIGHT_PS", "FOOT_RIGHT_L3",
+    "DOME_UP", "DOME_UP_CROSS", "DOME_UP_CIRCLE", "DOME_UP_L1", "DOME_UP_PS", "DOME_UP_L3",
+    "DOME_UP_L2", "DOME_UP_L2_CROSS", "DOME_UP_L2_CIRCLE",
+    "DOME_DOWN", "DOME_DOWN_CROSS", "DOME_DOWN_CIRCLE", "DOME_DOWN_L1", "DOME_DOWN_PS", "DOME_DOWN_L3",
+    "DOME_DOWN_L2", "DOME_DOWN_L2_CROSS", "DOME_DOWN_L2_CIRCLE",
+    "DOME_LEFT", "DOME_LEFT_CROSS", "DOME_LEFT_CIRCLE", "DOME_LEFT_L1", "DOME_LEFT_PS", "DOME_LEFT_L3",
+    "DOME_LEFT_L2", "DOME_LEFT_L2_CROSS", "DOME_LEFT_L2_CIRCLE",
+    "DOME_RIGHT", "DOME_RIGHT_CROSS", "DOME_RIGHT_CIRCLE", "DOME_RIGHT_L1", "DOME_RIGHT_PS", "DOME_RIGHT_L3",
+    "DOME_RIGHT_L2", "DOME_RIGHT_L2_CROSS", "DOME_RIGHT_L2_CIRCLE"
+};
+
+// Index into ROS_COMBO_NAMES, or -1.
+inline int comboFromName(const char* name, size_t len)
+{
+    for (int i = 0; i < ROS_COMBO_COUNT; i++)
+        if (nameEquals(name, len, ROS_COMBO_NAMES[i])) return i;
+    return -1;
+}
+
+// Which combo starts which mode: up to 8 assignments. Without any ROS:BIND: the droid
+// behaves as it always did (PS + L2 on the foot Nav -> goto).
+class ComboBindings
+{
+public:
+    static const int MAX = 8;
+
+    ComboBindings() { reset(); }
+
+    void clear()
+    {
+        for (int i = 0; i < MAX; i++) { combo[i] = -1; mode[i] = MODE_NONE; }
+    }
+
+    void reset()
+    {
+        clear();
+        combo[0] = 0;                 // FOOT_PS_L2
+        mode[0] = MODE_GOTO;
+    }
+
+    // Assign (or replace) a combo; MODE_NONE frees it. false if the table is full.
+    bool bind(int c, RosMode m)
+    {
+        if (c < 0 || c >= ROS_COMBO_COUNT) return false;
+        int slot = -1, freeSlot = -1;
+        for (int i = 0; i < MAX; i++)
+        {
+            if (combo[i] == c) slot = i;
+            else if (combo[i] < 0 && freeSlot < 0) freeSlot = i;
+        }
+        if (m == MODE_NONE)
+        {
+            if (slot >= 0) { combo[slot] = -1; mode[slot] = MODE_NONE; }
+            return true;
+        }
+        if (slot < 0) slot = freeSlot;
+        if (slot < 0) return false;
+        combo[slot] = (int8_t)c;
+        mode[slot] = m;
+        return true;
+    }
+
+    RosMode modeFor(int c) const
+    {
+        if (c < 0) return MODE_NONE;
+        for (int i = 0; i < MAX; i++)
+            if (combo[i] == c) return mode[i];
+        return MODE_NONE;
+    }
+
+private:
+    int8_t combo[MAX];
+    RosMode mode[MAX];
+};
 
 struct FootAutoConfig
 {
@@ -56,17 +179,23 @@ class FootAuto
 {
 public:
     explicit FootAuto(FootAutoConfig c)
-        : cfg(c), isOn(false), reason(FA_BOOT), hasCommand(false), moving(false),
+        : cfg(c), isOn(false), current(MODE_NONE), reason(FA_BOOT), hasCommand(false), moving(false),
           lastCommandMs(0), targetDrive(0), targetTurn(0), drive(0), turn(0) {}
 
     bool on() const { return isOn; }
     FootAutoReason lastOffReason() const { return reason; }
 
-    // The combo: off -> on, on -> off (reason: button). Always a change.
-    bool toggle()
+    RosMode mode() const { return current; }
+
+    // A mode combo: off -> on with m; on with m -> off (reason: button); on with another
+    // mode -> switch to m (the feet stop until the next command). Returns true if
+    // something changed (false only for MODE_NONE).
+    bool press(RosMode m)
     {
-        if (isOn) return turnOff(FA_BUTTON);
+        if (m == MODE_NONE) return false;
+        if (isOn && current == m) return turnOff(FA_BUTTON);
         isOn = true;
+        current = m;
         hasCommand = false;
         return true;
     }
@@ -76,6 +205,7 @@ public:
     {
         if (!isOn) return false;
         isOn = false;
+        current = MODE_NONE;
         reason = why;
         hasCommand = false;
         return true;
@@ -120,6 +250,7 @@ private:
 
     FootAutoConfig cfg;
     bool isOn;
+    RosMode current;
     FootAutoReason reason;
     bool hasCommand;
     bool moving;
@@ -201,17 +332,21 @@ private:
 //   ROS:DOME:<speed>          dome, -127..127, same as DM:
 //   ROS:TRACK:0               switch face tracking off (the Pi cannot switch it on)
 //   ROS:TRACK:?               ask for the state
+//   ROS:BIND:<COMBO>,<mode>   assign a combo to a mode (goto|forward|patrol|follow; none frees it)
+//   ROS:BIND:CLEAR            free every assignment
+//   ROS:BIND:RESET            back to the default (FOOT_PS_L2 -> goto)
 //
 // Exact upper case: these come from software. Nothing may follow the last number.
 
 enum RosCmdKind : uint8_t { ROS_NONE, ROS_FOOT, ROS_AUTO_OFF, ROS_AUTO_QUERY, ROS_DOME,
-                           ROS_TRACK_OFF, ROS_TRACK_QUERY, ROS_ERROR };
+                           ROS_TRACK_OFF, ROS_TRACK_QUERY, ROS_BIND, ROS_BIND_CLEAR,
+                           ROS_BIND_RESET, ROS_ERROR };
 
 struct RosCmd
 {
     RosCmdKind kind;
-    int a;               // ROS_FOOT: drive, ROS_DOME: speed
-    int b;               // ROS_FOOT: turn
+    int a;               // ROS_FOOT: drive, ROS_DOME: speed, ROS_BIND: combo index
+    int b;               // ROS_FOOT: turn, ROS_BIND: RosMode
     const char* error;   // ROS_ERROR: what was wrong, without the "ERR " prefix
 };
 
@@ -278,6 +413,22 @@ inline RosCmd parseRosCommand(const char* line)
         if (p[0] == '0' && p[1] == '\0') return rosCmd(ROS_TRACK_OFF);
         if (p[0] == '?' && p[1] == '\0') return rosCmd(ROS_TRACK_QUERY);
         return rosCmd(ROS_ERROR, 0, 0, "ROS:TRACK only 0 or ?");
+    }
+    if (rosSkipPrefix(p, "BIND:"))
+    {
+        if (nameEquals(p, rosStrLen(p), "CLEAR")) return rosCmd(ROS_BIND_CLEAR);
+        if (nameEquals(p, rosStrLen(p), "RESET")) return rosCmd(ROS_BIND_RESET);
+        const char* comma = p;
+        while (*comma && *comma != ',') comma++;
+        if (*comma != ',') return rosCmd(ROS_ERROR, 0, 0, "ROS:BIND needs <combo>,<mode>");
+        int combo = comboFromName(p, (size_t)(comma - p));
+        if (combo < 0) return rosCmd(ROS_ERROR, 0, 0, "unknown combo");
+        const char* name = comma + 1;
+        size_t len = rosStrLen(name);
+        if (nameEquals(name, len, "none")) return rosCmd(ROS_BIND, combo, MODE_NONE);
+        RosMode m = modeFromName(name, len);
+        if (m == MODE_NONE) return rosCmd(ROS_ERROR, 0, 0, "unknown mode");
+        return rosCmd(ROS_BIND, combo, m);
     }
     if (rosSkipPrefix(p, "DOME:"))
     {
