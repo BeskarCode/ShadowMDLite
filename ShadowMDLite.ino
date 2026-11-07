@@ -799,10 +799,6 @@ void setup()
     
     Serial.println("\r\nSystem starting up.\r\n");
     reportResetCause();
-#if ENABLE_ROS2D2
-    Serial.println(F("AUTO OFF boot"));
-    Serial.println(F("TRACK OFF boot"));
-#endif
 
     // CAN-Bus
     #ifdef CANBUS
@@ -882,6 +878,12 @@ void setup()
 
     randomSeed(analogRead(0));  // random number seed for dome automation   
     Serial.print(F("\r\n\r\nEntering Loop."));
+#if ENABLE_ROS2D2
+    // Last thing in setup(): USB and the motor controllers are up, loop() reads next. The Pi bridge
+    // re-sends its bindings when it sees these lines, so they must not come before the delays above.
+    Serial.println(F("AUTO OFF boot"));
+    Serial.println(F("TRACK OFF boot"));
+#endif
 }
 
 // =======================================================================================
