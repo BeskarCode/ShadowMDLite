@@ -96,10 +96,13 @@ tracking needs a dome Nav. The Mega boots with it off.
 |---|---|---|
 | `ROS:FOOT:<drive>,<turn>` | Feet, Sabertooth units −127..127 each, clamped to `FOOT_AUTO_MAX_DRIVE` / `FOOT_AUTO_MAX_TURN` and ramped by `FOOT_AUTO_RAMP`. The feet stop if none arrives for `FOOT_AUTO_TIMEOUT_MS` (300 ms). Only in autonomous mode | None (the Pi sends ~15 a second). `ERR FOOT AUTO OFF` when the mode is off, at most once a second |
 | `ROS:AUTO:0` | Switch the autonomous mode off | `AUTO OFF pi` (or the current state if it was already off) |
-| `ROS:AUTO:?` | Ask for the state | `AUTO ON` or `AUTO OFF <reason>` |
+| `ROS:AUTO:?` | Ask for the state | `AUTO ON <mode>` or `AUTO OFF <reason>` |
+| `ROS:BIND:<COMBO>,<mode>` | Assign a controller combo to a mode (`goto`, `forward`, `patrol` or `follow`; `none` frees it). Up to 8 assignments; an assigned combo no longer fires its MarcDuino function. Combo names: `FOOT_PS_L2`; `FOOT_<D>` plus `_CROSS`, `_CIRCLE`, `_L1`, `_PS`, `_L3`; `DOME_<D>` plus those and `_L2`, `_L2_CROSS`, `_L2_CIRCLE`; `<D>` = `UP`, `DOWN`, `LEFT` or `RIGHT` (e.g. `FOOT_UP_PS`) | `BIND OK <COMBO> <mode>`, `ERR BIND FULL`, `ERR unknown combo`, `ERR unknown mode` |
+| `ROS:BIND:CLEAR` | Free every assignment | `BIND CLEAR` |
+| `ROS:BIND:RESET` | Back to the default, also at start-up: `FOOT_PS_L2` -> `goto` | `BIND RESET` |
 | `ROS:TRACK:0` | Switch face tracking off | `TRACK OFF pi` (or the current state if it was already off) |
 | `ROS:TRACK:?` | Ask for the state | `TRACK ON` or `TRACK OFF <reason>` |
-| `ROS:DOME:<speed>` | Dome, −127..127, clamped to `DOME_TRACKER_MAX_SPEED`. Stops after `DOME_TRACKER_TIMEOUT_MS` without one; the dome stick always wins (and holds off the tracker for `DOME_TRACKER_MANUAL_HOLD_MS`). Only with face tracking on | None |
+| `ROS:DOME:<speed>` | Dome, −127..127, clamped to `DOME_TRACKER_MAX_SPEED`. Stops after `DOME_TRACKER_TIMEOUT_MS` without one; the dome stick always wins (and holds off the tracker for `DOME_TRACKER_MANUAL_HOLD_MS`). Only with face tracking or a mode on | None |
 | `DM:<speed>` | Same as `ROS:DOME:`, kept for the DomeTracker proof of concept | None, or `ERR Invalid DM speed` |
 
 `ROS:AUTO:1` (or anything but `0` / `?`) → `ERR ROS:AUTO only 0 or ?`: the Pi cannot switch the mode on.
@@ -110,7 +113,7 @@ The Mega also prints the state by itself every time it changes:
 
 ```
 AUTO OFF boot          at start-up
-AUTO ON                PS + L2
+AUTO ON <mode>         a mode combo (PS + L2 on the foot Nav -> goto by default)
 AUTO OFF <reason>      reason: button | stick | controller | pi
 TRACK OFF boot         at start-up
 TRACK ON               PS + L2 on the dome Nav

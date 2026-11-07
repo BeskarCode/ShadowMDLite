@@ -18,6 +18,17 @@
 #include <stddef.h>
 #include <stdint.h>
 
+// Long constant tables live in flash on the Mega (RAM is only 8 KB); on the PC they are
+// plain arrays. Read them with rosFlashChar().
+#if defined(__AVR__)
+#include <avr/pgmspace.h>
+#define ROS_FLASH PROGMEM
+inline char rosFlashChar(const char* p) { return (char)pgm_read_byte(p); }
+#else
+#define ROS_FLASH
+inline char rosFlashChar(const char* p) { return *p; }
+#endif
+
 enum FootAutoReason : uint8_t { FA_BOOT, FA_BUTTON, FA_STICK, FA_CONTROLLER, FA_PI };
 
 // The autonomous modes. Each one is switched on by its own controller combo (ComboBindings).
@@ -51,6 +62,18 @@ inline bool nameEquals(const char* name, size_t len, const char* lit)
     return lit[i] == '\0';
 }
 
+// nameEquals() with lit in ROS_FLASH.
+inline bool nameEqualsFlash(const char* name, size_t len, const char* lit)
+{
+    size_t i = 0;
+    for (; i < len; i++)
+    {
+        char c = rosFlashChar(lit + i);
+        if (c == '\0' || name[i] != c) return false;
+    }
+    return rosFlashChar(lit + i) == '\0';
+}
+
 // MODE_NONE when the name is not a mode (and for "none").
 inline RosMode modeFromName(const char* name, size_t len)
 {
@@ -60,9 +83,11 @@ inline RosMode modeFromName(const char* name, size_t len)
 }
 
 // Every controller combo that can start a mode. Same names and order in firmware, modes.yaml
-// and the console. Each one is a check...() function of ShadowMDLite.ino.
+// and the console. Each one is a check...() function of ShadowMDLite.ino. In flash on the
+// Mega (ROS_FLASH); ROS_COMBO_NAME_SIZE fits the longest name, DOME_RIGHT_L2_CIRCLE.
 const int ROS_COMBO_COUNT = 61;
-static const char* const ROS_COMBO_NAMES[ROS_COMBO_COUNT] = {
+const int ROS_COMBO_NAME_SIZE = 21;
+static const char ROS_COMBO_NAMES[ROS_COMBO_COUNT][ROS_COMBO_NAME_SIZE] ROS_FLASH = {
     "FOOT_PS_L2",
     "FOOT_UP", "FOOT_UP_CROSS", "FOOT_UP_CIRCLE", "FOOT_UP_L1", "FOOT_UP_PS", "FOOT_UP_L3",
     "FOOT_DOWN", "FOOT_DOWN_CROSS", "FOOT_DOWN_CIRCLE", "FOOT_DOWN_L1", "FOOT_DOWN_PS", "FOOT_DOWN_L3",
@@ -82,7 +107,7 @@ static const char* const ROS_COMBO_NAMES[ROS_COMBO_COUNT] = {
 inline int comboFromName(const char* name, size_t len)
 {
     for (int i = 0; i < ROS_COMBO_COUNT; i++)
-        if (nameEquals(name, len, ROS_COMBO_NAMES[i])) return i;
+        if (nameEqualsFlash(name, len, ROS_COMBO_NAMES[i])) return i;
     return -1;
 }
 
