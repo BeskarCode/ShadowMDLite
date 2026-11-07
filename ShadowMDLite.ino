@@ -668,6 +668,8 @@ unsigned long domeManualLastMs = 0;        // millis() of the last manual dome m
 FootAuto  footAuto(FootAutoConfig{FOOT_AUTO_MAX_DRIVE, FOOT_AUTO_MAX_TURN, FOOT_AUTO_TIMEOUT_MS, FOOT_AUTO_RAMP});
 ComboEdge footAutoCombo;                   // PS + L2 on the foot Nav
 ComboBindings bindings;                    // which combo switches which mode on (ROS:BIND:)
+ComboLatch footComboLatch;                 // bound foot-arrow combo held down (fires once per press)
+ComboLatch domeComboLatch;                 // same for the dome-arrow combos
 uint32_t  footAutoErrMs = (uint32_t)0 - (uint32_t)1000;   // last "ERR FOOT AUTO OFF" (1 per second)
 DomeTrack domeTrack;                       // face tracking: may the dome tracker turn the dome
 ComboEdge domeTrackCombo;                  // PS + L2 on the dome Nav
@@ -2612,10 +2614,13 @@ static void processMarcDuinoActions(const MarcDuinoAction* actions, uint8_t acti
     {
 #if ENABLE_ROS2D2
       // A combo assigned to a mode switches the mode instead of its MarcDuino function.
-      RosMode mode = bindings.modeFor(comboOf(actions[i].check));
+      // Only on the press: holding it would re-fire every second and flip the mode.
+      int combo = comboOf(actions[i].check);
+      RosMode mode = bindings.modeFor(combo);
       if (mode != MODE_NONE)
       {
-        rosModePress(mode);
+        ComboLatch& latch = combo < ROS_FIRST_DOME_COMBO ? footComboLatch : domeComboLatch;
+        if (latch.press(combo)) rosModePress(mode);
         return;
       }
 #endif
@@ -2772,6 +2777,9 @@ void marcDuinoFoot()
          
    } else
    {
+#if ENABLE_ROS2D2
+       footComboLatch.release();          // foot arrows up: a bound combo may fire again
+#endif
        return;    
    }
    
@@ -2832,6 +2840,9 @@ void marcDuinoDome()
          
    } else
    {
+#if ENABLE_ROS2D2
+       domeComboLatch.release();          // dome arrows up: a bound combo may fire again
+#endif
        return;    
    }
    
