@@ -34,6 +34,7 @@
     .page-header {
       display: flex;
       flex-wrap: wrap;
+      justify-content: flex-end;   /* title, language and logo on the right */
       align-items: center;
       gap: 1rem 1.25rem;
       margin-bottom: 0.5rem;
@@ -46,9 +47,12 @@
       object-fit: contain;
       display: block;
     }
-    /* Logo de Astromech.net: más alto que el wordmark, su texto no se lee a 48px */
+    /* Logo de Astromech Spain (versión blanca, para el fondo oscuro) */
     .page-header img.logo-astromech {
-      height: 72px;
+      height: 48px;
+      width: auto;
+      order: -1;            /* logo on the left, title and language on the right */
+      margin-right: auto;
     }
     /* Logo de Astromech Spain (blanco, para fondo oscuro), enlaza a su web */
     .page-header img.logo-astromech-spain {
@@ -74,7 +78,8 @@
       background: var(--border);
       flex-shrink: 0;
     }
-    .page-header .titles { flex: 1; min-width: 12rem; }
+    .page-header .titles { min-width: 12rem; text-align: right; }
+    .page-header .titles .lang-row { justify-content: flex-end; }
     .lang-row {
       display: flex;
       align-items: center;
@@ -265,6 +270,17 @@
       vertical-align: top;
       border-radius: 8px;
     }
+    /* R2 in 3D (r2view3d.js) in place of the flat blueprint */
+    .r2view { position: relative; width: 100%; aspect-ratio: 0.812; border-radius: 8px; overflow: hidden; }
+    .r2view canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+    .r2view-tools { position: absolute; left: 8px; right: 8px; top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+    .r2view-tools button { font-size: 0.72rem; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border);
+                           background: rgba(22, 27, 34, 0.85); color: var(--text); cursor: pointer; }
+    .r2view-tools #r2edittools { display: contents; }
+    .r2view-tools #r2edittools[hidden] { display: none; }
+    .r2view-tools button.on { background: var(--ok); border-color: var(--ok); color: #0d1117; }
+    .r2view-credit { position: absolute; left: 8px; right: 8px; bottom: 6px; font-size: 0.6rem; color: var(--muted); }
+    .r2view-credit a { color: var(--muted); }
     .hotspots {
       position: absolute;
       left: 0;
@@ -353,32 +369,6 @@
 </head>
 <body>
   <header class="page-header">
-    <div class="logo-group">
-      <svg class="logo-shadowmd" xmlns="http://www.w3.org/2000/svg" width="300" height="60" viewBox="0 0 300 60" role="img" aria-label="ShadowMD Lite — R2-D2">
-        <defs>
-          <linearGradient id="smdBlueH" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#79b8ff"/>
-            <stop offset="100%" stop-color="#388bfd"/>
-          </linearGradient>
-        </defs>
-        <rect x="3" y="8" width="46" height="44" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1.25"/>
-        <rect x="11" y="20" width="30" height="10" rx="2" fill="url(#smdBlueH)" opacity="0.95"/>
-        <circle cx="17" cy="40" r="3.5" fill="#da3633"/>
-        <circle cx="26" cy="40" r="3.5" fill="#d29922"/>
-        <circle cx="35" cy="40" r="3.5" fill="#3fb950"/>
-        <rect x="11" y="46" width="30" height="4" rx="1" fill="#30363d"/>
-        <text x="58" y="32" fill="#e6edf3" font-family="Segoe UI,system-ui,sans-serif" font-size="19" font-weight="700">ShadowMD</text>
-        <text x="58" y="48" fill="#8b949e" font-family="Segoe UI,system-ui,sans-serif" font-size="10.5" font-weight="400">R2-D2 &#183; USB serial</text>
-        <rect x="226" y="11" width="68" height="28" rx="6" fill="#58a6ff" fill-opacity="0.14" stroke="#58a6ff" stroke-width="1.25"/>
-        <text x="260" y="29" fill="#58a6ff" font-family="Segoe UI,system-ui,sans-serif" font-size="13" font-weight="700" text-anchor="middle">LITE</text>
-      </svg>
-      <span class="logo-sep" aria-hidden="true"></span>
-      <img class="logo-astromech" src="logo.png" width="357" height="160" alt="Astromech.net" />
-      <span class="logo-sep" aria-hidden="true"></span>
-      <a href="https://www.astromechspain.com/" target="_blank" rel="noopener" title="Astromech Spain">
-        <img class="logo-astromech-spain" src="astromech-spain.png" width="314" height="50" alt="Astromech Spain" />
-      </a>
-    </div>
     <div class="titles">
       <h1 data-i18n="h1Title">Serial console (USB)</h1>
       <p class="tagline">ShadowMD Lite · astromech R2-D2</p>
@@ -390,6 +380,7 @@
         </select>
       </div>
     </div>
+    <img class="logo-astromech" src="astromech-spain.png" width="314" height="50" alt="Astromech Spain · Be happy and build droids" />
   </header>
   <p class="sub" data-i18n-html="subIntro"></p>
 
@@ -455,7 +446,9 @@
     <h2 data-i18n="h2Blueprint">R2-D2 blueprint · image-based calibration</h2>
     <div class="blueprint-layout">
       <div class="blueprint-stage" id="blueprintStage">
+        <div class="r2view" id="r2view"><canvas aria-label="R2-D2 in 3D: click a numbered marker to pick the zone"></canvas></div>
         <img
+          style="display:none"
           src="r2d2plans.png"
           alt=""
           data-i18n-alt="blueprintAlt"
@@ -465,7 +458,7 @@
           loading="lazy"
           onerror="this.onerror=null;this.src='https://i.pinimg.com/736x/3a/e4/e9/3ae4e912e7e105efa20555f5736e9c3d.jpg';"
         />
-        <div class="hotspots" id="hotspots" aria-hidden="true"></div>
+        <div class="hotspots" id="hotspots" aria-hidden="true" style="display:none"></div>
       </div>
       <div class="blueprint-controls">
         <label for="zoneSelect" data-i18n="labelZoneSelect">Active zone</label>
@@ -522,6 +515,11 @@
   </div>
 
   <script src="i18n.js"></script>
+  <script src="vendor/three-r147/three.min.js"></script>
+  <script src="vendor/three-r147/GLTFLoader.js"></script>
+  <script src="vendor/three-r147/OrbitControls.js"></script>
+  <script src="vendor/three-r147/RoomEnvironment.js"></script>
+  <script src="vendor/r2d2-model.js"></script>
   <script>
     /**
      * ShadowMD: body → prefijo S3:, dome/holos → S1: (ver combo serialTarget / inferSerialTargetFromZone).
@@ -894,6 +892,7 @@
         const payload = withRoute + lineEnding();
         await writer.write(payload);
         appendLog("→ ", JSON.stringify(payload));
+        if (window.R2View3D) window.R2View3D.onCommand(withRoute);
       }
 
       async function sendCommand() {
@@ -1206,6 +1205,7 @@
           if (prev && prev.id) persistPwmRangeForZoneFromInputs(prev);
         }
         selectedZoneIndex = index;
+        if (window.R2View3D) window.R2View3D.setSelected(index);
         $("zoneSelect").value = String(index);
         const z = getCurrentZone();
         const inferredTarget = z && z.target ? z.target : inferSerialTargetFromZone(z);
@@ -1278,6 +1278,15 @@
         });
       }
 
+      // What the 3D view (r2view3d.js) needs from the console
+      window.R2Console = {
+        zones: R2_BLUEPRINT_ZONES,
+        selectZone: (i) => selectZone(i),
+        selected: () => selectedZoneIndex,
+        label: (z) => zoneDisplayLabel(z),
+        lang: () => uiLang,
+      };
+
       $("zoneSelect").addEventListener("change", () => {
         selectZone(parseInt($("zoneSelect").value, 10) || 0);
       });
@@ -1293,6 +1302,9 @@
       $("blueprintStage").addEventListener("click", (e) => {
         // Si el usuario clicó justo sobre un hotspot, déjalo que lo gestione su propio handler.
         if (e.target && e.target.closest && e.target.closest(".hotspot")) return;
+        // The 3D view handles its own clicks (pick a marker, or place one); this nearest-
+        // hotspot guess is only for the flat blueprint
+        if (e.target && e.target.closest && e.target.closest("#r2view")) return;
 
         const stage = $("blueprintStage");
         const rect = stage.getBoundingClientRect();
@@ -1345,6 +1357,8 @@
         uiLang = $("uiLang").value === "es" ? "es" : "en";
         localStorage.setItem(LANG_KEY, uiLang);
         applyUiLanguage();
+        window.dispatchEvent(new Event("r2-lang"));      // the 3D view relabels its buttons
+        if (window.R2View3D) window.R2View3D.setSelected(selectedZoneIndex);
       });
 
       $("btnConnect").addEventListener("click", openPort);
@@ -1362,5 +1376,6 @@
       });
     })();
   </script>
+  <script src="r2view3d.js"></script>
 </body>
 </html>

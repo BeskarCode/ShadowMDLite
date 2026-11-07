@@ -5,9 +5,9 @@ Tabla de todas las combinaciones de botones (mandos Foot y Dome), el código Mar
 | ID | Mando que dispara      | Combinación de botones                              | MD  | Serial que envía                                                                    | Significado MD (comentario del código)                           |
 |----|------------------------|-----------------------------------------------------|-----|-------------------------------------------------------------------------------------|------------------------------------------------------------------|
 | 1  | Foot                   | Foot UP                                             | 2   | Serial1: `:SE01\r`                                                                  | 2 = Scream - all panels open                                     |
-| 2  | Foot                   | Foot DOWN                                           | 11  | Serial1: `@0T1\r`, luego `:SE10\r`                                                 | 11 = Quiet mode reset (panel close, stop holos, stop sounds)     |
-| 3  | Foot                   | Foot LEFT                                           | 13  | Serial1: `:SE13\r`                                                                  | 13 = Mid Awake mode reset (panel close, rnd sound, stop holos)   |
-| 4  | Foot                   | Foot RIGHT                                          | 14  | Serial1: `:SE14\r`                                                                  | 14 = Full Awake+ reset (panel close, rnd sound, holo move, lights on) |
+| 2  | Foot                   | Foot DOWN                                           | 11  | Serial1: `@0T1\r`, `@0P1\r`, `*HPT/HPR/HPF0000\r`, `*APLE…\r`                       | 11 = Lights reset (lógicas + PSI normal, luces holos off; sin mover paneles) |
+| 3  | Foot                   | Foot LEFT                                           | 13  | Serial1: `*ST00\r`, `$R\r`, `*HPF/HPT/HPR0000\r`                                   | 13 = Mid Awake (rnd sound, stop holos; sin mover paneles)        |
+| 4  | Foot                   | Foot RIGHT                                          | 14  | Serial1: `*RD00\r`, `*ON00\r`, `$R\r`, `*HPF/HPT/HPR001\r`                         | 14 = Full Awake+ (rnd sound, holo move, holo lights on; sin mover paneles) |
 | 5  | Dome                   | Dome UP                                             | 82  | Serial3: `:SE31\r`                                                                  | 82 = Eebel Open all Body Doors, raise arms, operate tools, lower arms close all doors |
 | 6  | Dome                   | Dome DOWN                                           | 56  | Serial3: `:OP01\r`, `delay(550)`, `:ST01\r` **o** `:CL01\r` (según `DPLOpen`)      | 56 = Open Body Panel #1 — en código: toggle Data Panel Door      |
 | 7  | Dome                   | Dome LEFT                                           | 84  | Serial3: `:SE34\r`                                                                  | 84 = Eebel Use Interface Tool                                    |
@@ -76,3 +76,18 @@ Tabla de todas las combinaciones de botones (mandos Foot y Dome), el código Mar
 | 70 | Dome+Foot              | Dome DOWN + L2 + Foot CIRCLE                      | 0   | —                                                                                   | 0 = FREE                                                         |
 | 71 | Dome+Foot              | Dome LEFT + L2 + Foot CIRCLE                      | 0   | —                                                                                   | 0 = FREE                                                         |
 | 72 | Dome+Foot              | Dome RIGHT + L2 + Foot CIRCLE                     | 0   | —                                                                                   | 0 = FREE                                                         |
+| 73 | Foot                   | Foot PS + Foot L2                                   | —   | — (USB: `AUTO ON goto` / `AUTO OFF button`)                                         | Modo ROS2D2 `goto` on/off (`ENABLE_ROS2D2`; combinación por defecto, se cambia con `ROS:BIND:`). Tocar el stick del foot, perder el mando o `ROS:AUTO:0` lo apagan. El dome no sigue caras con esto: ver #74 |
+| 74 | Dome                   | Dome PS + Dome L2                                   | —   | — (USB: `TRACK ON` / `TRACK OFF button`)                                            | Seguimiento de caras ROS2D2 on/off (`ENABLE_ROS2D2`): el dome mira a quien tenga delante, independiente del modo autónomo. El stick del dome lo pausa 2 s; perder el mando del dome o `ROS:TRACK:0` lo apagan |
+
+### ROS2D2: modos y combinaciones (`ENABLE_ROS2D2`)
+
+Hay cuatro modos: `goto` (Ir a un punto), `forward` (Avanzar), `patrol` (Patrulla) y `follow` (Seguir un color). Solo el mando los enciende; la Pi solo puede apagarlos (`ROS:AUTO:0`). Cualquier combinación de la tabla (nombres `FOOT_PS_L2`, `FOOT_UP`, `FOOT_UP_PS`, `DOME_LEFT_L2_CIRCLE`…) puede encender un modo; mientras está asignada **no lanza** su función del MarcDuino. Pulsar la combinación del modo activo lo apaga (`AUTO OFF button`); la de otro modo cambia directamente (`AUTO ON <otro>`) y los pies se paran hasta la siguiente orden de la Pi. Con un modo encendido la Pi puede mover el dome (`ROS:DOME:`) aunque el seguimiento de caras esté apagado. `Dome PS + Dome L2` (#74) no se puede asignar.
+
+| Comando USB                 | Respuesta                                      | Qué hace |
+|-----------------------------|------------------------------------------------|----------|
+| `ROS:BIND:<COMBO>,<modo>`   | `BIND OK <COMBO> <modo>`, `ERR BIND FULL`      | Asigna la combinación a `goto`/`forward`/`patrol`/`follow`; `none` la libera (máximo 8 asignaciones) |
+| `ROS:BIND:CLEAR`            | `BIND CLEAR`                                   | Libera todas: ninguna combinación enciende un modo |
+| `ROS:BIND:RESET`            | `BIND RESET`                                   | Vuelve al defecto: `FOOT_PS_L2` → `goto` (también al arrancar) |
+| `ROS:AUTO:?`                | `AUTO ON <modo>` / `AUTO OFF <razón>`          | Estado del modo |
+
+Errores: `ERR unknown combo`, `ERR unknown mode`, `ERR ROS:BIND needs <combo>,<mode>`.
