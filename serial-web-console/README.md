@@ -184,7 +184,7 @@ What it carries over:
 What it tells you about:
 
 - **Code you changed by hand.** The migrator compares every function of your sketch with the stock one. A function you changed, or one you added, does not carry over by itself: the report gives its tab and line so you can redo the change in ShadowMD Lite if you still need it.
-- **A function number ShadowMD Lite does not have** (Lite runs MarcDuino functions 1 to 89): that button is left unassigned (0), never given another function.
+- **A function number ShadowMD Lite does not have** (Lite runs MarcDuino functions 1 to 90): that button is left unassigned (0), never given another function.
 - **A setting missing from your sketch:** ShadowMD Lite's value is kept.
 
 Your files are only read, never changed. **Download a backup of my sketch** saves all your tabs in one text file with today's date, in case you want to go back.
