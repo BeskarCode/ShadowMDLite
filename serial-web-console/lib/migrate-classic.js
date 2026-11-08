@@ -195,7 +195,52 @@
     return out + '"';
   }
 
-  const api = { VARIANTS, SETTINGS, indexSketch, readClassic, translateCustom, cLiteral };
+  // ---- hand-edited code. Known add-ons (ShadowMD Lite has its own version of each) are not
+  // hand edits: PC forwarding, ROS2D2 (FootAuto, dome tracker) and the controller layer (Joy-Con).
+  const ADD_ON_FILES = {
+    "pc-forwarding": /^PcForwarding\.h$/i,
+    ros2d2: /^FootAuto\.h$/i,
+    "controller-layer": /^(DroidController|DroidPad|JoyConController|JoyConPairing|PS3NavController|ControllerConfig)\.h$/i,
+  };
+  const ADD_ON_FUNCTIONS = /^(pcFwd|ros[A-Z]|footAuto|domeTrack|printAutoState$|printTrackState$)/;
+
+  function isAddOnFile(name) {
+    return Object.keys(ADD_ON_FILES).some((k) => ADD_ON_FILES[k].test(name));
+  }
+
+  /** Which known add-ons the sketch has: "pc-forwarding", "ros2d2", "controller-layer" (in that order). */
+  function knownAddOns(files) {
+    const names = (files || []).map((f) => f.name);
+    const idx = indexSketch(files);
+    const found = [];
+    if (names.some((n) => ADD_ON_FILES["pc-forwarding"].test(n)) || "ENABLE_PC_TO_MARCDUINO_FORWARDING" in idx.defines) found.push("pc-forwarding");
+    if (names.some((n) => ADD_ON_FILES.ros2d2.test(n)) || "ENABLE_ROS2D2" in idx.defines) found.push("ros2d2");
+    if (names.some((n) => ADD_ON_FILES["controller-layer"].test(n))) found.push("controller-layer");
+    return found;
+  }
+
+  /**
+   * Functions that differ from the stock sketch of the variant, or that it does not have:
+   * [{ code: "changed-function" | "added-function", name, file, line }], in file order.
+   */
+  function findHandEdits(files, variantId) {
+    const ref = (root.ClassicReference || requireReference())[variantId];
+    if (!ref) return [];
+    const out = [];
+    SketchText.splitFunctions(files).forEach((f) => {
+      if (isAddOnFile(f.file) || ADD_ON_FUNCTIONS.test(f.name)) return;
+      const want = ref.functions[f.key];
+      if (want === undefined) out.push({ code: "added-function", name: f.name, file: f.file, line: f.line });
+      else if (want !== SketchText.fnv1a(SketchText.normalizeBody(f.body))) out.push({ code: "changed-function", name: f.name, file: f.file, line: f.line });
+    });
+    return out;
+  }
+
+  function requireReference() {
+    return typeof module !== "undefined" && module.exports ? require("./classic-reference.js") : {};
+  }
+
+  const api = { VARIANTS, SETTINGS, indexSketch, readClassic, translateCustom, cLiteral, knownAddOns, findHandEdits };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.MigrateClassic = api;
 })(this);

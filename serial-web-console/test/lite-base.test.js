@@ -49,6 +49,14 @@ test("normalizeBody ignores comments, spacing, preprocessor lines, pcFwd and ROS
   assert.equal(T.normalizeBody("{ a(); // note\n  b(); }"), T.normalizeBody("{a();b();}"));
 });
 
+test("normalizeBody keeps the #else branch of an add-on block (the add-on switched off is the stock code)", () => {
+  const withAddOn = "{\n#if ENABLE_ROS2D2\n x = track(s);\n#else\n x = s;\n#endif\n}";
+  assert.equal(T.normalizeBody(withAddOn), T.normalizeBody("{ x = s; }"));
+  const nested = "{\n#if ENABLE_ROS2D2\n#if A\n y();\n#endif\n#else\n z();\n#endif\n}";
+  assert.equal(T.normalizeBody(nested), T.normalizeBody("{ z(); }"));
+  assert.equal(T.normalizeBody("{\n#if ENABLE_PC_TO_MARCDUINO_FORWARDING && !ENABLE_ROS2D2\n pcFwdReadUsb();\n#endif\n a(); }"), T.normalizeBody("{a();}"));
+});
+
 test("fnv1a gives 8 hex characters and differs for different text", () => {
   assert.match(T.fnv1a("abc"), /^[0-9a-f]{8}$/);
   assert.notEqual(T.fnv1a("abc"), T.fnv1a("abd"));
