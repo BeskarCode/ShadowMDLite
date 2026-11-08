@@ -505,6 +505,9 @@
           <button type="button" class="btn-ghost" id="zonePrev" data-i18n="zonePrev">◀ Previous</button>
           <button type="button" class="btn-ghost" id="zoneNext" data-i18n="zoneNext">Next ▶</button>
         </div>
+        <div class="zone-nav">
+          <button type="button" class="btn-ghost" id="edToggle" data-i18n="edToggle">Edit parts</button>
+        </div>
         <div class="marker-editor" id="markerEditor" hidden>
           <h3 data-i18n="edTitle">Droid parts</h3>
           <p class="hint" id="edHint" data-i18n="edHint">Each change is saved in this browser as soon as it is valid.</p>
@@ -523,6 +526,7 @@
           <p class="ed-error" id="edError" hidden></p>
           <div class="ed-buttons">
             <button type="button" class="btn-ok" id="edAdd" data-i18n="edAdd">Add part</button>
+            <button type="button" class="btn-ghost" id="edMove" data-i18n="edMove">Place on R2</button>
             <button type="button" class="btn-warn" id="edDelete" data-i18n="edDelete">Delete</button>
           </div>
           <div class="ed-buttons">
@@ -868,6 +872,7 @@
         addMarker,
         removeMarker,
         setConfig,
+        ask: (text, buttons) => askInPage(text, buttons),
       };
 
       // ------------------------------------------------------------ part editor (pencil)
@@ -901,6 +906,7 @@
 
       /** In-page question (never window.confirm): text plus buttons [{label, cls, fn}]. */
       function askInPage(text, buttons) {
+        $("markerEditor").hidden = false;       // the question lives in the editor panel
         $("edPromptText").textContent = text;
         const box = $("edPromptBtns");
         box.innerHTML = "";
@@ -925,6 +931,8 @@
         const fields = ["edName", "edNameEs", "edKind", "edBoard", "edChannel", "edAxisH", "edAxisV", "edDelete"];
         fields.forEach((id) => { $(id).disabled = !m; });
         $("edHint").textContent = m ? L("edHint") : L("edNoParts");
+        $("edMove").disabled = !m;
+        setPlacing2d(placing2d);
         showEditorError("");
         if (!m) {
           ["edName", "edNameEs", "edChannel"].forEach((id) => { $(id).value = ""; });
@@ -997,7 +1005,42 @@
           return;
         }
         // Straight to "click on R2 to place it"
-        if (window.R2View3D && window.R2View3D.place) window.R2View3D.place();
+        startPlacing();
+      });
+
+      // ---- placing a marker: on the 3D R2, or on the 2D blueprint when there is no WebGL
+      let placing2d = false;
+
+      function has3d() {
+        return !!(window.R2View3D && window.R2View3D.is3d && window.R2View3D.is3d());
+      }
+
+      function setPlacing2d(on) {
+        placing2d = !!on && !!getCurrentZone();
+        $("edMove").classList.toggle("btn-ok", placing2d);
+        $("edMove").textContent = placing2d ? L("edPlacing2d") : L("edMove");
+        $("blueprintStage").style.cursor = placing2d ? "crosshair" : "";
+      }
+
+      function startPlacing() {
+        if (!getCurrentZone()) return;
+        if (has3d()) window.R2View3D.place();
+        else setPlacing2d(true);
+      }
+
+      /** Blueprint click while placing: the marker's 2D spot, in % like the existing ones. */
+      function placeOn2d(xPct, yPct) {
+        const z = getCurrentZone();
+        setPlacing2d(false);
+        if (!z) return;
+        const r2 = (v) => Math.round(v * 100) / 100;
+        const spot = { left: r2(xPct - 1.6), top: r2(yPct - 1.6), w: 3.2, h: 3.2 };
+        updateMarker(z.id, { map2d: [spot] });
+      }
+
+      $("edMove").addEventListener("click", () => {
+        if (placing2d) setPlacing2d(false);
+        else startPlacing();
       });
 
       $("edDelete").addEventListener("click", () => {
@@ -1108,11 +1151,15 @@
         ]);
       });
 
-      // The pencil of the 3D view opens and closes the editor
-      window.addEventListener("r2-edit", (e) => {
-        $("markerEditor").hidden = !e.detail;
-        if (e.detail) renderEditor();
-      });
+      function showEditor(on) {
+        $("markerEditor").hidden = !on;
+        $("edToggle").classList.toggle("btn-ok", on);
+        if (on) renderEditor();
+        else setPlacing2d(false);
+      }
+      // The pencil of the 3D view opens and closes the editor; "Edit parts" works without 3D too
+      window.addEventListener("r2-edit", (e) => showEditor(!!e.detail));
+      $("edToggle").addEventListener("click", () => showEditor($("markerEditor").hidden));
 
       applyUiLanguage();
 
@@ -1714,6 +1761,7 @@
             lab.textContent = zlab;
             d.appendChild(lab);
             d.addEventListener("click", () => {
+              if (placing2d) return;                  // the stage handler places the marker
               selectZone(i);
             });
             box.appendChild(d);
@@ -1735,8 +1783,6 @@
       $("pwmMin").addEventListener("change", onPwmRangeFieldChange);
       $("pwmMax").addEventListener("change", onPwmRangeFieldChange);
       $("blueprintStage").addEventListener("click", (e) => {
-        // Si el usuario clicó justo sobre un hotspot, déjalo que lo gestione su propio handler.
-        if (e.target && e.target.closest && e.target.closest(".hotspot")) return;
         // The 3D view handles its own clicks (pick a marker, or place one); this nearest-
         // hotspot guess is only for the flat blueprint
         if (e.target && e.target.closest && e.target.closest("#r2view")) return;
@@ -1747,6 +1793,12 @@
         const yPx = e.clientY - rect.top;
         const xPct = (xPx / rect.width) * 100;
         const yPct = (yPx / rect.height) * 100;
+        if (placing2d) {
+          placeOn2d(xPct, yPct);
+          return;
+        }
+        // Si el usuario clicó justo sobre un hotspot, déjalo que lo gestione su propio handler.
+        if (e.target && e.target.closest && e.target.closest(".hotspot")) return;
 
         // Modo calibración manual (batch): log con zona seleccionada + coords.
         const current = getCurrentZone();
