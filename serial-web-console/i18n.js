@@ -35,6 +35,12 @@ window.SHADOWMD_LITE_I18N = {
     btnSend: "Send",
     btnClearLog: "Clear log",
     flashTitle: "Flash the Mega (.hex)",
+    toolFlash: "Flash the Mega",
+    compatNote:
+      "Works with <strong>ShadowMD Lite</strong> or with the <strong>classic Shadow MD with PC forwarding turned on</strong>. With a stock Shadow MD the console connects, but the commands never reach the MarcDuinos. Guides: <a href=\"https://github.com/BeskarCode/ShadowMDLite/blob/main/PCSerialProtocol.md\" target=\"_blank\" rel=\"noopener\">ShadowMD Lite</a> · <a href=\"https://github.com/BeskarCode/SHADOW_MD_EEBEL/blob/pc-forwarding/docs/web-console.md\" target=\"_blank\" rel=\"noopener\">classic Shadow MD (how to turn it on)</a>. Flashing the Mega works with any sketch.",
+    toolParts: "Droid parts",
+    toolRouting: "Command routing",
+    dlgClose: "Close",
     flashIntro:
       "Load a compiled sketch onto the Mega from here, no Arduino IDE upload needed. In the IDE use <strong>Sketch → Export compiled binary</strong> and choose the <code>.ino.hex</code> file (not the <code>with_bootloader</code> one). Close the IDE's Serial Monitor first.",
     flashPick: "Choose .hex file…",
@@ -214,6 +220,12 @@ window.SHADOWMD_LITE_I18N = {
     btnSend: "Enviar",
     btnClearLog: "Vaciar log",
     flashTitle: "Flashear la Mega (.hex)",
+    toolFlash: "Flashear la Mega",
+    compatNote:
+      "Funciona con <strong>ShadowMD Lite</strong> o con el <strong>Shadow MD clásico con el reenvío desde el PC activado</strong>. Con el Shadow MD de serie la consola conecta, pero las órdenes no llegan a los MarcDuinos. Guías: <a href=\"https://github.com/BeskarCode/ShadowMDLite/blob/main/PCSerialProtocol.md\" target=\"_blank\" rel=\"noopener\">ShadowMD Lite</a> · <a href=\"https://github.com/BeskarCode/SHADOW_MD_EEBEL/blob/pc-forwarding/docs/web-console.md\" target=\"_blank\" rel=\"noopener\">Shadow MD clásico (cómo activarlo)</a>. Flashear la Mega funciona con cualquier sketch.",
+    toolParts: "Piezas del droide",
+    toolRouting: "Enrutado de comandos",
+    dlgClose: "Cerrar",
     flashIntro:
       "Carga un sketch compilado en la Mega desde aquí, sin subirlo desde el IDE de Arduino. En el IDE usa <strong>Programa → Exportar binario compilado</strong> y elige el archivo <code>.ino.hex</code> (no el <code>with_bootloader</code>). Cierra antes el monitor serie del IDE.",
     flashPick: "Elegir archivo .hex…",

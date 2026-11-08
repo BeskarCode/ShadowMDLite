@@ -323,16 +323,50 @@
     }
     .hotspot:hover .hotspot-label,
     .hotspot.selected .hotspot-label { opacity: 1; }
-    .routing-help { margin: 0 0 0.75rem; }
-    .routing-help summary {
-      cursor: pointer;
-      font-size: 0.8rem;
-      color: var(--muted);
-      padding: 0.15rem 0;
-      user-select: none;
+    /* Which firmware the console needs, with links to the guides */
+    .compat-note {
+      flex-shrink: 0;
+      margin: 0 0 0.65rem;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.85rem;
+      border: 1px solid var(--warn);
+      border-left-width: 4px;
+      border-radius: 6px;
+      background: var(--panel);
     }
-    .routing-help summary:hover { color: var(--accent); }
-    .routing-help .hint { margin: 0.4rem 0 0; }
+    .compat-note::before { content: "\f05a"; color: var(--warn); }
+    .compat-note a { color: var(--accent); }
+    /* Toolbar in the header: opens the windows (dialogs) and the parts editor */
+    .tools { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .tools button { padding: 0.45rem 0.85rem; font-size: 0.85rem; }
+    /* Windows (native <dialog>, modal: Esc or the X closes them) */
+    dialog.modal {
+      width: min(36rem, calc(100vw - 2rem));
+      max-height: calc(100vh - 2rem);
+      overflow-y: auto;
+      padding: 0;
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+    }
+    dialog.modal::backdrop { background: rgba(5, 8, 12, 0.65); }
+    .modal-head {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.85rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      background: var(--panel);
+    }
+    .modal-head h2 { flex: 1; margin: 0; font-size: 1rem; font-weight: 600; }
+    .modal-close { background: transparent; color: var(--muted); padding: 0.3rem 0.55rem; font-size: 1rem; }
+    .modal-close:hover:not(:disabled) { color: var(--text); }
+    .modal-body { padding: 1rem 1.25rem 1.25rem; }
+    .modal-body > .hint:first-child { margin-top: 0; }
     .blueprint-controls label { display: block; margin-top: 0.65rem; margin-bottom: 0.25rem; }
     .blueprint-controls input[type="range"] {
       width: 100%;
@@ -405,9 +439,6 @@
     .ed-prompt div { display: flex; flex-wrap: wrap; gap: 0.4rem; }
     .ed-prompt button { padding: 0.3rem 0.7rem; font-size: 0.8rem; }
     /* Flash the Mega */
-    .flash-panel summary { cursor: pointer; font-weight: 600; font-size: 0.95rem; }
-    .flash-panel[open] summary { margin-bottom: 0.4rem; }
-    .flash-panel .hint { margin-top: 0; }
     .flash-panel [hidden] { display: none; }
     .flash-summary p { margin: 0 0 0.4rem; font-size: 0.85rem; overflow-wrap: anywhere; }
     .flash-warn { color: var(--warn); font-weight: 600; }
@@ -469,8 +500,10 @@
     #btnPanelClose::before { content: "\f52a"; }
     #btnCenterServos::before { content: "\f05b"; }
     #btnCenterAllHolos::before { content: "\f140"; }
-    #flashPanel > summary::before { content: "\f2db"; }
-    .routing-help > summary::before { content: "\f4d7"; }
+    #toolFlash::before, #flashTitleH::before { content: "\f2db"; }
+    #toolRouting::before, #routingTitleH::before { content: "\f4d7"; }
+    #toolParts::before { content: "\f12e"; }
+    .modal-close::before { content: "\f00d"; margin-right: 0; }
     .blueprint-panel > h2::before { content: "\f544"; }
     #edTitleH::before { content: "\f12e"; }
     .col-console > .col-title::before { content: "\f120"; }
@@ -479,6 +512,11 @@
 </head>
 <body>
   <header class="page-header">
+    <nav class="tools" aria-label="Tools">
+      <button type="button" class="ic btn-ghost" id="toolFlash" data-i18n="toolFlash">Flash the Mega</button>
+      <button type="button" class="ic btn-ghost" id="toolParts" data-i18n="toolParts">Droid parts</button>
+      <button type="button" class="ic btn-ghost" id="toolRouting" data-i18n="toolRouting">Command routing</button>
+    </nav>
     <div class="titles">
       <h1 data-i18n="h1Title">Serial console (USB)</h1>
       <p class="tagline">ShadowMD Lite · astromech R2-D2</p>
@@ -493,6 +531,7 @@
     <img class="logo-astromech" src="astromech-spain.png" width="314" height="50" alt="Astromech Spain · Be happy and build droids" />
   </header>
   <p class="sub" data-i18n-html="subIntro"></p>
+  <p class="compat-note ic" data-i18n-html="compatNote"></p>
 
   <div class="app-main">
     <div class="col-console">
@@ -528,10 +567,6 @@
         </select>
       </div>
     </div>
-    <details class="routing-help">
-      <summary class="ic" data-i18n="routingHelpSummary">Command routing — quick reference</summary>
-      <p class="hint" data-i18n-html="routingHint"></p>
-    </details>
     <div class="checks row">
       <label><input type="checkbox" id="cr" checked /> <span data-i18n-html="chkCr"></span></label>
       <label><input type="checkbox" id="lf" /> <span data-i18n-html="chkLf"></span></label>
@@ -548,8 +583,21 @@
     </div>
   </div>
 
-  <details class="panel flash-panel" id="flashPanel">
-    <summary class="ic" data-i18n="flashTitle">Flash the Mega</summary>
+
+  <dialog class="modal" id="routingDialog" aria-labelledby="routingTitleH">
+    <div class="modal-head">
+      <h2 class="ic" id="routingTitleH" data-i18n="routingHelpSummary">Command routing — quick reference</h2>
+      <button type="button" class="ic modal-close" data-close data-i18n-title="dlgClose" aria-label="Close"></button>
+    </div>
+    <div class="modal-body"><p class="hint" data-i18n-html="routingHint"></p></div>
+  </dialog>
+
+  <dialog class="modal" id="flashDialog" aria-labelledby="flashTitleH">
+    <div class="modal-head">
+      <h2 class="ic" id="flashTitleH" data-i18n="flashTitle">Flash the Mega</h2>
+      <button type="button" class="ic modal-close" id="flashClose" data-close data-i18n-title="dlgClose" aria-label="Close"></button>
+    </div>
+    <div class="modal-body flash-panel" id="flashPanel">
     <p class="hint" data-i18n-html="flashIntro"></p>
     <div class="row">
       <button type="button" class="ic btn-ghost" id="flashPick" data-i18n="flashPick">Choose .hex file…</button>
@@ -574,7 +622,8 @@
       <button type="button" class="ic btn-ghost" id="flashCancel" data-i18n="flashCancel">Cancel</button>
     </div>
     <div class="flash-msg" id="flashMsg" hidden></div>
-  </details>
+    </div>
+  </dialog>
     </div>
 
     <div class="col-config">
@@ -1300,6 +1349,7 @@
         const cancelOk = !flashBusy || flash.phase === null || flash.phase === "reset" || flash.phase === "sync" || flash.phase === "port";
         $("flashCancel").disabled = !cancelOk;
         $("flashPick").disabled = flashBusy;
+        $("flashClose").disabled = flashBusy;
 
         const prog = $("flashProgress");
         prog.hidden = !flash.phase;
@@ -1505,6 +1555,34 @@
         chooseHexFile(f || null);
       });
       $("flashGo").addEventListener("click", () => flashHexFile(flash.file));
+
+      // ------------------------------------------------------------ windows (dialogs)
+      // Flash and Routing open as modal windows from the header. The parts editor stays next to
+      // the R2 (you pick and place parts by clicking the model), the header button just opens it.
+      function openDialog(id) {
+        const d = $(id);
+        if (!d.open) d.showModal();
+      }
+      document.querySelectorAll("dialog.modal").forEach((d) => {
+        // Esc must not close the flash window while the Mega is being flashed
+        d.addEventListener("cancel", (e) => {
+          if (d.id === "flashDialog" && flashBusy) e.preventDefault();
+        });
+        d.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", () => d.close()));
+        // click on the dark backdrop closes too (not while flashing)
+        d.addEventListener("click", (e) => {
+          if (e.target === d && !(d.id === "flashDialog" && flashBusy)) d.close();
+        });
+      });
+      $("toolFlash").addEventListener("click", () => {
+        renderFlash();
+        openDialog("flashDialog");
+      });
+      $("toolRouting").addEventListener("click", () => openDialog("routingDialog"));
+      $("toolParts").addEventListener("click", () => {
+        showEditor(true);
+        $("markerEditor").scrollIntoView({ behavior: "smooth", block: "nearest" });
+      });
       $("flashCancel").addEventListener("click", () => {
         if (!flashBusy) {
           chooseHexFile(null); // forget the file
