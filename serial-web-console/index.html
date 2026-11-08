@@ -147,7 +147,7 @@
     }
     .panel-console {
       flex: 1;
-      min-height: 0;
+      min-height: auto; /* never shrink below its content (the flash panel sits below it) */
       display: flex;
       flex-direction: column;
     }
@@ -404,6 +404,40 @@
     .ed-prompt p { margin: 0 0 0.4rem; font-size: 0.85rem; }
     .ed-prompt div { display: flex; flex-wrap: wrap; gap: 0.4rem; }
     .ed-prompt button { padding: 0.3rem 0.7rem; font-size: 0.8rem; }
+    /* Flash the Mega */
+    .flash-panel summary { cursor: pointer; font-weight: 600; font-size: 0.95rem; }
+    .flash-panel[open] summary { margin-bottom: 0.4rem; }
+    .flash-panel .hint { margin-top: 0; }
+    .flash-panel [hidden] { display: none; }
+    .flash-summary p { margin: 0 0 0.4rem; font-size: 0.85rem; overflow-wrap: anywhere; }
+    .flash-warn { color: var(--warn); font-weight: 600; }
+    .flash-progress { margin: 0 0 0.75rem; }
+    .flash-phases {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      list-style: none;
+      margin: 0 0 0.5rem;
+      padding: 0;
+      font-size: 0.75rem;
+    }
+    .flash-phases li {
+      padding: 0.15rem 0.55rem;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+    }
+    .flash-phases li.active { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+    .flash-phases li.done { border-color: var(--ok); color: var(--ok); }
+    .flash-phases li.failed { border-color: var(--err); color: var(--err); font-weight: 600; }
+    #flashBar { width: 100%; height: 0.8rem; accent-color: var(--accent); }
+    #flashPhaseText { margin: 0.3rem 0 0; font-size: 0.8rem; color: var(--muted); }
+    .flash-msg { font-size: 0.85rem; padding: 0.5rem 0.75rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); }
+    .flash-msg p { margin: 0 0 0.3rem; }
+    .flash-msg p:last-child { margin-bottom: 0; }
+    .flash-msg.ok { border-color: var(--ok); color: var(--ok); }
+    .flash-msg.bad { border-color: var(--err); }
+    .flash-msg.bad p:first-child { color: var(--err); font-weight: 600; }
   </style>
 </head>
 <body>
@@ -476,6 +510,34 @@
       <div id="log"></div>
     </div>
   </div>
+
+  <details class="panel flash-panel" id="flashPanel">
+    <summary data-i18n="flashTitle">Flash the Mega</summary>
+    <p class="hint" data-i18n-html="flashIntro"></p>
+    <div class="row">
+      <button type="button" class="btn-ghost" id="flashPick" data-i18n="flashPick">Choose .hex file…</button>
+      <input type="file" id="flashFile" accept=".hex,.ihex,text/plain" hidden />
+    </div>
+    <div class="flash-summary" id="flashSummary" hidden>
+      <p id="flashSummaryText"></p>
+      <p class="flash-warn" data-i18n="flashOverwrite">Flashing replaces the program the Mega has now.</p>
+    </div>
+    <div class="flash-progress" id="flashProgress" hidden>
+      <ol class="flash-phases">
+        <li data-phase="reset" data-i18n="flashPhaseReset">Reset</li>
+        <li data-phase="sync" data-i18n="flashPhaseSync">Bootloader</li>
+        <li data-phase="write" data-i18n="flashPhaseWrite">Write</li>
+        <li data-phase="verify" data-i18n="flashPhaseVerify">Verify</li>
+      </ol>
+      <progress id="flashBar" max="1000" value="0"></progress>
+      <p id="flashPhaseText"></p>
+    </div>
+    <div class="row" id="flashBtns" hidden>
+      <button type="button" class="btn-warn" id="flashGo" data-i18n="flashBtn">Flash</button>
+      <button type="button" class="btn-ghost" id="flashCancel" data-i18n="flashCancel">Cancel</button>
+    </div>
+    <div class="flash-msg" id="flashMsg" hidden></div>
+  </details>
     </div>
 
     <div class="col-config">
@@ -596,6 +658,9 @@
   <script src="vendor/three-r147/RoomEnvironment.js"></script>
   <script src="vendor/r2d2-model.js"></script>
   <script src="lib/droid-config.js"></script>
+  <script src="lib/intel-hex.js"></script>
+  <script src="lib/stk500v2.js"></script>
+  <script src="lib/webserial-transport.js"></script>
   <script>
     /**
      * ShadowMD: body → prefijo S3:, dome/holos → S1: (ver combo serialTarget / inferSerialTargetFromZone).
@@ -661,6 +726,9 @@
       let selectedZoneIndex = 0;
       let autoSendTimer = null;
       let serialConnected = false;
+      let pipeDone = null; // console writer -> port.writable
+      let readLoopDone = null; // the console's read loop
+      let flashBusy = false; // the flasher owns the port
 
       function applyUiLanguage() {
         document.documentElement.lang = uiLang === "es" ? "es" : "en";
@@ -731,7 +799,9 @@
       }
 
       function refreshStatusText() {
-        if (!serialConnected) {
+        if (flashBusy) {
+          statusEl.textContent = L("statusFlashing");
+        } else if (!serialConnected) {
           statusEl.textContent = L("statusDisconnected");
         } else {
           const baud = parseInt($("baud").value, 10) || 115200;
@@ -1161,6 +1231,265 @@
       window.addEventListener("r2-edit", (e) => showEditor(!!e.detail));
       $("edToggle").addEventListener("click", () => showEditor($("markerEditor").hidden));
 
+      // ------------------------------------------------------------ flash the Mega
+      // Pick a .hex -> summary -> Flash -> phases + bar -> result. The flasher takes the port
+      // from the console (or asks for one), opens it at 115200 for the bootloader, closes it
+      // and gives it back to the console at the baud rate it had.
+
+      const FLASH_PHASES = ["reset", "sync", "write", "verify"];
+      const flash = {
+        file: null, // File chosen
+        hex: null, // { bytes, size } parsed from it
+        phase: null, // phase being run, or where it stopped
+        failedPhase: null,
+        progressKey: null, // [key, vars] under the bar
+        msg: null, // { cls: "ok" | "bad", lines: [[key, vars], ...] }
+        transport: null,
+        cancelled: false,
+      };
+
+      function kb(n) {
+        return (n / 1024).toFixed(1);
+      }
+
+      function setFlashMsg(cls, lines) {
+        flash.msg = cls ? { cls, lines } : null;
+        renderFlash();
+      }
+
+      /** Redraws the whole section from `flash` (also on a language change). */
+      function renderFlash() {
+        const hasSerial = "serial" in navigator;
+        const sum = $("flashSummary");
+        sum.hidden = !flash.hex;
+        if (flash.hex) {
+          $("flashSummaryText").textContent = L("flashSummary", {
+            name: flash.file ? flash.file.name : "",
+            kb: kb(flash.hex.size),
+            max: kb(IntelHex.MAX_SIZE),
+          });
+        }
+        $("flashBtns").hidden = !flash.hex;
+        $("flashGo").disabled = !flash.hex || flashBusy || !hasSerial;
+        // Cancel: before anything is written only (choosing a file, reset, waiting for the bootloader)
+        const cancelOk = !flashBusy || flash.phase === null || flash.phase === "reset" || flash.phase === "sync" || flash.phase === "port";
+        $("flashCancel").disabled = !cancelOk;
+        $("flashPick").disabled = flashBusy;
+
+        const prog = $("flashProgress");
+        prog.hidden = !flash.phase;
+        const idx = FLASH_PHASES.indexOf(flash.phase);
+        prog.querySelectorAll(".flash-phases li").forEach((li) => {
+          const i = FLASH_PHASES.indexOf(li.getAttribute("data-phase"));
+          li.classList.toggle("done", flash.phase === "done" || (idx >= 0 && i < idx));
+          li.classList.toggle("active", flashBusy && i === idx);
+          li.classList.toggle("failed", !flashBusy && li.getAttribute("data-phase") === flash.failedPhase);
+        });
+        $("flashPhaseText").textContent = flash.progressKey ? L(flash.progressKey[0], flash.progressKey[1]) : "";
+
+        const box = $("flashMsg");
+        let lines = flash.msg ? flash.msg.lines : null;
+        if (!lines && !hasSerial) lines = [["flashNoSerial"]];
+        box.hidden = !lines;
+        box.className = "flash-msg" + (flash.msg ? " " + flash.msg.cls : "");
+        box.textContent = "";
+        (lines || []).forEach((ln) => {
+          const p = document.createElement("p");
+          p.textContent = L(ln[0], ln[1]);
+          box.appendChild(p);
+        });
+      }
+
+      /** Reads and checks the .hex; throws the parser's error (with .code). */
+      async function readHexFile(file) {
+        let text;
+        try {
+          text = await file.text();
+        } catch (e) {
+          const err = new Error(e.message || String(e));
+          err.code = "read";
+          throw err;
+        }
+        return IntelHex.parseIntelHex(text);
+      }
+
+      function hexErrorLines(e) {
+        const code = e && e.code;
+        const known = ["bad-line", "bad-checksum", "too-big", "empty", "truncated", "read"];
+        const key = known.indexOf(code) >= 0 ? "hexErr_" + code : "hexErr_generic";
+        return [[key, { msg: (e && e.message) || String(e) }], ["hexRecover"]];
+      }
+
+      async function chooseHexFile(file) {
+        flash.file = null;
+        flash.hex = null;
+        flash.phase = null;
+        flash.failedPhase = null;
+        flash.progressKey = null;
+        setFlashMsg(null);
+        if (!file) return;
+        try {
+          flash.hex = await readHexFile(file);
+          flash.file = file;
+          renderFlash();
+        } catch (e) {
+          setFlashMsg("bad", hexErrorLines(e));
+        }
+      }
+
+      function flashErrorLines(e, wroteSomething) {
+        const code = (e && e.code) || "";
+        const vars = { msg: (e && e.message) || String(e) };
+        if (code === "cancelled") return [["flashCancelled"], ["flashNothingWritten"]];
+        if (code === "open") return [["flashErr_open", vars], ["flashNothingWritten"]];
+        const lines = [];
+        if (code === "verify-failed") {
+          vars.addr = (e.address >>> 0).toString(16).toUpperCase();
+          lines.push(["flashErr_verify-failed", vars]);
+        } else if (code === "wrong-chip") {
+          vars.sig = Array.from(e.signature || [], (b) => b.toString(16).toUpperCase().padStart(2, "0")).join(" ");
+          lines.push(["flashErr_wrong-chip", vars]);
+        } else if (["timeout", "no-sync", "disconnected", "bad-checksum", "bad-status", "protocol", "too-big", "empty"].indexOf(code) >= 0) {
+          lines.push(["flashErr_" + code, vars]);
+        } else {
+          lines.push(["flashErr_generic", vars]);
+        }
+        lines.push([wroteSomething ? "flashIncomplete" : "flashNothingWritten"]);
+        lines.push(["flashRecover"]);
+        return lines;
+      }
+
+      function onFlashProgress(phase, done, total) {
+        if (phase === "done") {
+          flash.phase = "done";
+          $("flashBar").value = 1000;
+          renderFlash();
+          return;
+        }
+        flash.phase = phase;
+        let v = 0;
+        if (phase === "reset") flash.progressKey = ["flashStatusReset"];
+        else if (phase === "sync") flash.progressKey = ["flashStatusSync", { i: done, n: total }];
+        else if (phase === "write") {
+          flash.progressKey = ["flashStatusWrite", { done: kb(done), total: kb(total) }];
+          v = total ? (done / total) * 500 : 0;
+        } else if (phase === "verify") {
+          flash.progressKey = ["flashStatusVerify", { done: kb(done), total: kb(total) }];
+          v = 500 + (total ? (done / total) * 500 : 0);
+        }
+        $("flashBar").value = Math.round(v);
+        renderFlash();
+      }
+
+      function setFlashBusy(on) {
+        flashBusy = on;
+        setConnected(serialConnected);
+        refreshStatusText();
+        renderFlash();
+      }
+
+      /**
+       * Flashes `file` (an Intel HEX from "Export compiled binary") onto the Mega.
+       * Uses the console's port if it is connected (and reconnects it afterwards at the same
+       * baud rate); otherwise asks for a port.
+       */
+      async function flashHexFile(file) {
+        if (flashBusy || !file) return;
+        let p = port;
+        const wasConnected = serialConnected && !!port;
+        const baud = parseInt($("baud").value, 10) || 115200;
+        // Ask for the port first, while the click still counts as a user gesture
+        if (!p) {
+          try {
+            p = await navigator.serial.requestPort();
+          } catch (e) {
+            if (e.name !== "NotFoundError") setFlashMsg("bad", [["flashErr_open", { msg: e.message || String(e) }], ["flashNothingWritten"]]);
+            return;
+          }
+        }
+        let hex = flash.file === file ? flash.hex : null;
+        if (!hex) {
+          try {
+            hex = await readHexFile(file);
+          } catch (e) {
+            setFlashMsg("bad", hexErrorLines(e));
+            return;
+          }
+        }
+
+        flash.cancelled = false;
+        flash.failedPhase = null;
+        flash.phase = "port";
+        flash.progressKey = ["flashStatusPort"];
+        $("flashBar").value = 0;
+        flash.msg = null;
+        setFlashBusy(true);
+        let wrote = false;
+        try {
+          if (wasConnected) await releaseConsole();
+          if (flash.cancelled) throw Object.assign(new Error("cancelled"), { code: "cancelled" });
+          try {
+            await p.open({ baudRate: 115200 });
+          } catch (e) {
+            throw Object.assign(new Error(e.message || String(e)), { code: "open" });
+          }
+          flash.transport = WebSerialTransport.createWebSerialTransport(p, (line) => console.log("[flash] " + line));
+          if (flash.cancelled) flash.transport.abort();
+          await Stk500v2.flashMega(flash.transport, hex.bytes, (phase, done, total) => {
+            if (phase === "write") wrote = true;
+            onFlashProgress(phase, done, total);
+          });
+          flash.progressKey = null;
+          flash.msg = { cls: "ok", lines: [["flashDone", { kb: kb(hex.size) }]] };
+        } catch (e) {
+          flash.failedPhase = FLASH_PHASES.indexOf(flash.phase) >= 0 ? flash.phase : null;
+          flash.progressKey = null;
+          flash.msg = { cls: "bad", lines: flashErrorLines(e, wrote) };
+        } finally {
+          if (flash.transport) {
+            try {
+              await flash.transport.close();
+            } catch (_) {}
+            flash.transport = null;
+          }
+          try {
+            await p.close();
+          } catch (_) {}
+          flashBusy = false;
+          if (wasConnected) {
+            try {
+              await openConsoleOn(p, baud);
+            } catch (e) {
+              port = null;
+              writer = null;
+              flash.msg.lines.push(["flashReconnectFail", { msg: e.message || String(e) }]);
+            }
+          }
+          setFlashBusy(false);
+          if (!serialConnected) setConnected(false);
+        }
+      }
+      window.flashHexFile = flashHexFile;
+
+      $("flashPick").addEventListener("click", () => {
+        $("flashFile").value = "";
+        $("flashFile").click();
+      });
+      $("flashFile").addEventListener("change", () => {
+        const f = $("flashFile").files && $("flashFile").files[0];
+        chooseHexFile(f || null);
+      });
+      $("flashGo").addEventListener("click", () => flashHexFile(flash.file));
+      $("flashCancel").addEventListener("click", () => {
+        if (!flashBusy) {
+          chooseHexFile(null); // forget the file
+          return;
+        }
+        if (flash.phase === "write" || flash.phase === "verify") return; // too late: it would leave half a program
+        flash.cancelled = true;
+        if (flash.transport) flash.transport.abort();
+      });
+
       applyUiLanguage();
 
       if (!("serial" in navigator)) {
@@ -1171,8 +1500,9 @@
 
       function setConnected(connected) {
         serialConnected = connected;
-        $("btnConnect").disabled = connected;
-        $("btnDisconnect").disabled = !connected;
+        $("btnConnect").disabled = connected || flashBusy;
+        $("btnDisconnect").disabled = !connected || flashBusy;
+        $("baud").disabled = flashBusy;
         $("btnSend").disabled = !connected;
         document.querySelectorAll(".need-serial").forEach((el) => {
           el.disabled = !connected;
@@ -1272,42 +1602,74 @@
         logEl.scrollTop = logEl.scrollHeight;
       }
 
-      async function startReadLoop() {
+      function startReadLoop() {
+        const p = port;
+        readLoopDone = readLoop();
+        // The loop ends by itself only when the port is gone (USB unplugged): close what is left
+        // so Connect works again without reloading the page.
+        readLoopDone.then((lost) => {
+          if (lost && port === p) onConsoleLost();
+        });
+        return readLoopDone;
+      }
+
+      async function onConsoleLost() {
+        await releaseConsole();
+        setConnected(false);
+        statusEl.textContent = L("statusLost");
+        statusEl.classList.add("error");
+      }
+
+      async function readLoop() {
         readLoopAbort = false;
         const decoder = new TextDecoder();
-        if (!port || !port.readable) return;
+        if (!port || !port.readable) return false;
         reader = port.readable.getReader();
+        let lost = false;
         try {
           while (!readLoopAbort) {
             const { value, done } = await reader.read();
-            if (done) break;
+            if (done) {
+              lost = !readLoopAbort;
+              break;
+            }
             if (value && value.length) {
               appendLog("← ", decoder.decode(value, { stream: true }));
             }
           }
         } catch (e) {
-          if (!readLoopAbort) appendLog("! ", L("logReadErr") + (e.message || e));
+          if (!readLoopAbort) {
+            appendLog("! ", L("logReadErr") + (e.message || e));
+            lost = true;
+          }
         } finally {
           try {
             reader.releaseLock();
           } catch (_) {}
           reader = null;
         }
+        return lost;
+      }
+
+      /** Opens `p` for the console at `baud`: text writer + read loop. Throws if it cannot open. */
+      async function openConsoleOn(p, baud) {
+        await p.open({ baudRate: baud });
+        port = p;
+        const enc = new TextEncoderStream();
+        pipeDone = enc.readable.pipeTo(p.writable).catch(() => {});
+        writer = enc.writable.getWriter();
+        statusEl.textContent = L("statusConnected", { baud });
+        setConnected(true);
+        startReadLoop();
       }
 
       async function openPort() {
+        if (flashBusy) return;
+        let p = null;
         try {
-          port = await navigator.serial.requestPort();
+          p = await navigator.serial.requestPort();
           const baud = parseInt($("baud").value, 10) || 115200;
-          await port.open({ baudRate: baud });
-
-          const enc = new TextEncoderStream();
-          enc.readable.pipeTo(port.writable).catch(() => {});
-          writer = enc.writable.getWriter();
-
-          statusEl.textContent = L("statusConnected", { baud });
-          setConnected(true);
-          startReadLoop();
+          await openConsoleOn(p, baud);
         } catch (e) {
           if (e.name === "NotFoundError") return;
           statusEl.textContent = "Error: " + (e.message || e);
@@ -1318,23 +1680,42 @@
         }
       }
 
-      async function closePort() {
+      /**
+       * Stops the console's reader and writer and closes the port, waiting until the streams
+       * are unlocked (port.close() fails on a locked stream). Returns the SerialPort it closed.
+       */
+      /** Waits for `pr` at most `ms` (a port whose USB is gone must not hang the page). */
+      function within(pr, ms) {
+        return Promise.race([Promise.resolve(pr).catch(() => {}), new Promise((r) => setTimeout(r, ms))]);
+      }
+
+      async function releaseConsole() {
+        const p = port;
         readLoopAbort = true;
         try {
-          if (reader) {
-            await reader.cancel();
-          }
+          if (reader) await reader.cancel();
         } catch (_) {}
         try {
-          if (writer) {
-            await writer.close();
-          }
+          if (readLoopDone) await readLoopDone;
+        } catch (_) {}
+        readLoopDone = null;
+        try {
+          if (writer) await within(writer.close(), 1000);
         } catch (_) {}
         writer = null;
         try {
-          if (port) await port.close();
+          if (pipeDone) await within(pipeDone, 1000);
+        } catch (_) {}
+        pipeDone = null;
+        try {
+          if (p) await within(p.close(), 1000);
         } catch (_) {}
         port = null;
+        return p;
+      }
+
+      async function closePort() {
+        await releaseConsole();
         setConnected(false);
       }
 

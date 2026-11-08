@@ -69,6 +69,18 @@ test("parseIntelHex rejects garbage lines with bad-line and an empty file with e
   assert.equal(codeOf(() => parseIntelHex(":00000001FF\n")), "empty");
 });
 
+test("parseIntelHex rejects a file without the type-01 end record with truncated", () => {
+  // a .hex cut short (download interrupted, copy-paste lost the tail): data but no :00000001FF
+  assert.equal(codeOf(() => parseIntelHex(":0400000001020304F2\n")), "truncated");
+  assert.equal(codeOf(() => parseIntelHex(":0400000001020304F2\r\n:0100040022D9\r\n")), "truncated");
+  const img = new Uint8Array(4096).fill(0x5a);
+  const full = toIntelHex(img);
+  const cut = full.slice(0, full.lastIndexOf(":00000001FF"));
+  assert.equal(codeOf(() => parseIntelHex(cut)), "truncated");
+  // the end record may be followed by blank lines
+  assert.equal(parseIntelHex(full + "\r\n\r\n").size, 4096);
+});
+
 function toIntelHex(img) {
   const lines = [];
   let upper = -1;

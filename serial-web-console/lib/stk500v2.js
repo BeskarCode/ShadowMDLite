@@ -10,7 +10,8 @@
  *   drain(): Promise<void>                  throws away bytes received so far (input flush)
  *
  * Errors carry .code: "timeout" | "no-sync" | "wrong-chip" | "verify-failed" |
- * "bad-checksum" | "bad-status" | "protocol" | "too-big" | "empty".
+ * "bad-checksum" | "bad-status" | "protocol" | "too-big" | "empty", plus whatever the
+ * transport throws ("disconnected", "cancelled" for the Web Serial one; not retried by sign-on).
  */
 (function (root) {
   "use strict";
@@ -36,7 +37,12 @@
     timeoutMs: 1000, // per command (a page write takes a few ms on the chip)
     syncTimeoutMs: 200, // per sign-on attempt
     syncAttempts: 10,
-    resetDelayMs: 50, // DTR low time, and wait after raising it
+    resetDelayMs: 50, // DTR low time
+    // Wait after raising DTR before the first sign-on. The chip needs ~65 ms to start up; a
+    // sign-on sent earlier arrives cut and leaves the real bootloader stuck mid-frame
+    // (seen on a Mega 2560 R3: 50 ms -> no answer at all, 250 ms -> answers at once).
+    // The bootloader waits ~0.9 s for the first byte before starting the sketch.
+    bootWaitMs: 250,
   };
 
   function fail(code, msg, extra) {
@@ -141,6 +147,8 @@
           const len = ans[2] || 0;
           return String.fromCharCode.apply(null, Array.from(ans.subarray(3, 3 + len)));
         } catch (e) {
+          // the port is gone or the user cancelled: retrying cannot help
+          if (e && (e.code === "disconnected" || e.code === "cancelled")) throw e;
           lastErr = e;
         }
       }
@@ -218,7 +226,7 @@
    * Full upload: DTR reset -> sign-on (10 x 200 ms) -> signature must be 1E 98 01 ->
    * enter prog -> write -> verify -> leave prog (the bootloader then starts the sketch).
    * onProgress(phase, done, total), phase: "reset" | "sync" | "write" | "verify" | "done".
-   * opts (mainly for tests): timeoutMs, syncTimeoutMs, syncAttempts, resetDelayMs.
+   * opts (mainly for tests): timeoutMs, syncTimeoutMs, syncAttempts, resetDelayMs, bootWaitMs.
    */
   async function flashMega(transport, bytes, onProgress, opts) {
     const o = Object.assign({}, DEFAULTS, opts || {});
@@ -230,7 +238,7 @@
     await transport.setDTR(false);
     await sleep(o.resetDelayMs);
     await transport.setDTR(true);
-    await sleep(o.resetDelayMs);
+    await sleep(o.bootWaitMs);
     await transport.drain();
     progress("reset", 1, 1);
 
