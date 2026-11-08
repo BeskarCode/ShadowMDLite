@@ -345,6 +345,18 @@
     .onb-skip { margin: 1rem 0 0; text-align: right; }
     .onb-skip button { font-size: 0.8rem; padding: 0.3rem 0.7rem; }
     #toolGuide::before { content: "\f14e"; }
+    #toolMigrate::before, #migTitleH::before { content: "\e13a"; }
+    #migGo::before { content: "\e13a"; }
+    #migLoad::before { content: "\f07c"; }
+    #migDlIno::before, #migDlReport::before, #migDlBackup::before { content: "\f019"; }
+    dialog.mig { width: min(46rem, calc(100vw - 2rem)); }
+    dialog.mig textarea { margin-bottom: 0.6rem; font-size: 0.8rem; }
+    .mig-report h3 { font-size: 0.95rem; margin: 0.9rem 0 0.3rem; }
+    .mig-report p { margin: 0 0 0.35rem; font-size: 0.85rem; }
+    .mig-report ul { margin: 0 0 0.5rem; padding-left: 1.2rem; font-size: 0.82rem; }
+    .mig-report li { margin-bottom: 0.2rem; overflow-wrap: anywhere; }
+    #migDownloads { margin-top: 0.8rem; }
+    #migrateDialog [hidden] { display: none; }
     /* Guided channel walk: a non-modal card (the R2 behind it must stay clickable) */
     dialog.walk-card {
       position: fixed;
@@ -573,6 +585,7 @@
       <button type="button" class="ic btn-ghost" id="toolFlash" data-i18n="toolFlash">Flash the Mega</button>
       <button type="button" class="ic btn-ghost" id="toolParts" data-i18n="toolParts">Droid parts</button>
       <button type="button" class="ic btn-ghost" id="toolWalk" data-i18n="toolWalk">Channel walk</button>
+      <button type="button" class="ic btn-ghost" id="toolMigrate" data-i18n="toolMigrate">Migrate to Lite</button>
       <button type="button" class="ic btn-ghost" id="toolRouting" data-i18n="toolRouting">Command routing</button>
     </nav>
     <div class="titles">
@@ -766,6 +779,31 @@
     </div>
   </dialog>
 
+  <dialog class="modal mig" id="migrateDialog" aria-labelledby="migTitleH">
+    <div class="modal-head">
+      <h2 class="ic" id="migTitleH" data-i18n="migTitle">Migrate a classic Shadow MD to ShadowMD Lite</h2>
+      <button type="button" class="ic modal-close" data-close data-i18n-title="dlgClose" aria-label="Close"></button>
+    </div>
+    <div class="modal-body">
+      <p class="hint" data-i18n-html="migIntro"></p>
+      <textarea id="migIno" rows="5" data-i18n-placeholder="migPlaceholder" placeholder="Paste your classic Shadow MD sketch here"></textarea>
+      <input type="file" id="migFiles" accept=".ino,.h,.cpp,.txt" multiple hidden />
+      <div class="row">
+        <button type="button" class="ic btn-ghost" id="migLoad" data-i18n="onbLoadFiles">Load sketch files…</button>
+        <button type="button" class="ic btn-primary" id="migGo" data-i18n="migGo">Migrate</button>
+      </div>
+      <div id="migResult" hidden>
+        <p class="onb-summary" id="migSummary"></p>
+        <div class="mig-report" id="migReport"></div>
+        <div class="row" id="migDownloads">
+          <button type="button" class="ic btn-ok" id="migDlIno" data-i18n="migDlIno">Download ShadowMDLite.ino</button>
+          <button type="button" class="ic btn-ghost" id="migDlReport" data-i18n="migDlReport">Download the report</button>
+          <button type="button" class="ic btn-ghost" id="migDlBackup" data-i18n="migDlBackup">Download a backup of my sketch</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
   <dialog class="modal" id="flashDialog" aria-labelledby="flashTitleH">
     <div class="modal-head">
       <h2 class="ic" id="flashTitleH" data-i18n="flashTitle">Flash the Mega</h2>
@@ -913,6 +951,10 @@
   <script src="lib/ino-detect.js"></script>
   <script src="lib/ino-patch.js"></script>
   <script src="lib/onboarding.js"></script>
+  <script src="lib/sketch-text.js"></script>
+  <script src="lib/lite-base.js"></script>
+  <script src="lib/classic-reference.js"></script>
+  <script src="lib/migrate-classic.js"></script>
   <script>
     /**
      * ShadowMD: body → prefijo S3:, dome/holos → S1: (ver combo serialTarget / inferSerialTargetFromZone).
@@ -2229,6 +2271,116 @@
       });
 
       if (Onboarding.shouldAutoOpen(onb.state, HAD_SAVED_SETUP)) onbOpen();
+
+      // ------------------------------------------------------------ migrate to ShadowMD Lite
+      // Paste or load the classic Shadow MD tabs -> report + migrated ShadowMDLite.ino. The
+      // builder's files are only read; the backup is a download of them, joined with the date.
+      const mig = { files: null, result: null };
+
+      /** The report as lines: [kind, text], kind "h" (heading), "p" or "li". */
+      function migReportLines(r) {
+        const rep = r.report;
+        const out = [];
+        const std = rep.buttons.filter((b) => b.kind === "standard");
+        const un = rep.buttons.filter((b) => b.kind === "unassigned");
+        out.push(["p", L("migLiteVersion", { v: rep.liteVersion })]);
+        out.push(["h", L("migButtonsH")]);
+        out.push(["p", L("migButtonsStd", { n: std.length, total: rep.buttons.length })]);
+        rep.custom.forEach((c) => out.push(["li", L("migCustom", { button: c.button, lite: c.lite, code: c.code, cmds: c.commands.map((k) => k.cmd.replace(/\r$/, "") + (k.delayAfterMs > 100 ? " (+" + k.delayAfterMs / 1000 + " s)" : "")).join(", ") })]));
+        un.forEach((b) => {
+          const w = rep.warnings.find((x) => x.detail && x.detail.button === b.classic);
+          out.push(["li", L(w && w.code === "unknown-md-func" ? "migUnknownFunc" : "migUnassigned", { button: b.classic, lite: b.lite, f: b.mdFunc })]);
+        });
+        out.push(["p", L("migLiteOnly", { n: rep.liteOnly.length })]);
+        out.push(["h", L("migSettingsH")]);
+        out.push(["p", L("migSettingsCopied", { n: rep.settings.filter((s) => s.status === "copied").length })]);
+        rep.settings.filter((s) => s.status === "kept-lite").forEach((s) => out.push(["li", L("migSettingKept", { name: s.name })]));
+        if (rep.addOns.length) {
+          out.push(["h", L("migAddOnsH")]);
+          rep.addOns.forEach((a) => out.push(["li", L("migAddOn_" + a)]));
+        }
+        out.push(["h", L("migEditsH")]);
+        if (!rep.edits.length) out.push(["p", L("migNoEdits")]);
+        rep.edits.forEach((e) => out.push(["li", L(e.code === "added-function" ? "migAdded" : "migChanged", { name: e.name, file: e.file, line: e.line })]));
+        return out;
+      }
+
+      function migToReview(rep) {
+        return rep.warnings.length + rep.edits.length;
+      }
+
+      function migRender() {
+        const r = mig.result;
+        const box = $("migResult");
+        box.hidden = !r;
+        if (!r) return;
+        const sum = $("migSummary");
+        const rep = $("migReport");
+        rep.innerHTML = "";
+        $("migDownloads").hidden = !r.ok;
+        if (!r.ok) {
+          sum.classList.add("bad");
+          sum.textContent = L(r.looksLike === "lite" ? "migIsLite" : "migNotClassic");
+          return;
+        }
+        const n = migToReview(r.report);
+        sum.classList.toggle("bad", n > 0);
+        sum.textContent = n ? L("migReview", { n }) : L("migAllGood");
+        let list = null;
+        migReportLines(r).forEach(([kind, text]) => {
+          if (kind === "li") {
+            if (!list) list = rep.appendChild(document.createElement("ul"));
+            list.appendChild(document.createElement("li")).textContent = text;
+            return;
+          }
+          list = null;
+          rep.appendChild(document.createElement(kind === "h" ? "h3" : "p")).textContent = text;
+        });
+      }
+
+      function migRun(files) {
+        mig.files = files;
+        mig.result = MigrateClassic.migrate(files);
+        migRender();
+      }
+
+      $("toolMigrate").addEventListener("click", () => {
+        migRender();
+        $("migrateDialog").showModal();
+      });
+      $("migLoad").addEventListener("click", () => {
+        $("migFiles").value = "";
+        $("migFiles").click();
+      });
+      $("migFiles").addEventListener("change", async () => {
+        const list = Array.from($("migFiles").files || []);
+        if (!list.length) return;
+        const files = await Promise.all(list.map(async (f) => ({ name: f.name, text: await f.text() })));
+        $("migIno").value = "";
+        migRun(files);
+      });
+      $("migGo").addEventListener("click", () => {
+        const text = $("migIno").value;
+        if (text.trim()) migRun([{ name: "sketch.ino", text }]);
+        else if (mig.files) migRun(mig.files);
+      });
+      $("migDlIno").addEventListener("click", () => {
+        if (mig.result && mig.result.ok) downloadText("ShadowMDLite.ino", mig.result.ino);
+      });
+      $("migDlReport").addEventListener("click", () => {
+        if (!mig.result || !mig.result.ok) return;
+        const lines = [$("migSummary").textContent, ""].concat(migReportLines(mig.result).map(([k, t]) => (k === "h" ? "\n" + t.toUpperCase() : k === "li" ? "  - " + t : t)));
+        downloadText("migration-report.txt", lines.join("\n") + "\n");
+      });
+      $("migDlBackup").addEventListener("click", () => {
+        if (!mig.files) return;
+        const day = new Date().toISOString().slice(0, 10);
+        downloadText("shadow-md-backup-" + day + ".txt", mig.files.map((f) => "// ===== " + f.name + " =====\n" + f.text).join("\n\n"));
+      });
+      window.addEventListener("r2-lang", () => {
+        if ($("migrateDialog").open) migRender();
+      });
+
 
 
       $("flashCancel").addEventListener("click", () => {
