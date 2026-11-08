@@ -19,6 +19,11 @@ test("LiteBase has the marcDuinoButtonPush anchor once and the 60 button variabl
   assert.ok(!LiteBase.text.includes("\r"), "stored with LF line endings");
 });
 
+test("LiteBase is up to date with ShadowMDLite.ino (run node scripts/build-lite-base.js after changing the sketch)", () => {
+  const ino = fs.readFileSync(path.join(__dirname, "..", "..", "ShadowMDLite.ino"), "utf8").replace(/\r\n?/g, "\n");
+  assert.ok(LiteBase.text === ino, "lib/lite-base.js is out of date: run node scripts/build-lite-base.js");
+});
+
 test("LiteBase has a version", () => {
   assert.equal(typeof LiteBase.version, "string");
   assert.ok(LiteBase.version.length > 0);
