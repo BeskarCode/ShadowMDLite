@@ -130,7 +130,72 @@
     return out;
   }
 
-  const api = { VARIANTS, SETTINGS, indexSketch, readClassic };
+  // ---- custom (type 2) buttons, as the classic sketch sends them (d_FUNCTIONS.ino,
+  // marcDuinoButtonPush type == 2, and custMarcDuinoPanel)
+  const GAP_MS = 100; // MARCDUINO_CMD_GAP_MS in ShadowMD Lite
+
+  function soundCommand(mp3) {
+    if (mp3 === 182) return "$87";
+    if (mp3 === 183) return "$88";
+    if (mp3 >= 184 && mp3 <= 200) return "$8" + String(mp3 - 175).padStart(2, "0"); // 184 -> $809 … 200 -> $825
+    if (mp3 === 201) return "$82";
+    if (mp3 === 202) return "$803";
+    return null;
+  }
+
+  const LD_COMMANDS = { 1: "@0T1", 2: "@0T4", 3: "@0T5", 4: "@0T6", 5: "@0T10", 6: "@0T11", 7: "@0T92" };
+
+  /**
+   * The commands a custom button sends, in order, each with the wait before the next one:
+   * [{ cmd, delayAfterMs }]. Same commands and timing as the classic sketch; waits are at
+   * least 100 ms (what ShadowMD Lite leaves between MarcDuino commands).
+   */
+  function translateCustom(b) {
+    const events = []; // { t, cmd }
+    const at = (t, cmd) => events.push({ t, cmd: cmd + "\r" });
+    const sound = soundCommand(b.mp3);
+    if (sound) at(0, sound);
+    if (b.panel >= 1 && b.panel <= 9) {
+      at(0, ":CL00");
+      if (b.panel >= 2 && b.panel <= 8) at(0, ":SE" + (49 + b.panel)); // 2 -> :SE51 … 8 -> :SE57
+      if (b.panel === 9) {
+        (b.dp || []).forEach((d) => {
+          if (!d.use || d.start > 30) return;
+          const ch = String(d.n).padStart(2, "0");
+          at(d.start * 1000, ":OP" + ch);
+          if (d.open > 0 && d.open < 31) at((d.start + d.open) * 1000, ":CL" + ch);
+        });
+      }
+    }
+    if (LD_COMMANDS[b.ldType]) at(0, LD_COMMANDS[b.ldType]);
+    if (b.ldType === 8) {
+      at(0, "@0T100");
+      at(0, "@0M" + (b.ldText || ""));
+    }
+    const sorted = events.map((e, i) => ({ e, i })).sort((a, z) => a.e.t - z.e.t || a.i - z.i).map((x) => x.e);
+    return sorted.map((e, i) => ({
+      cmd: e.cmd,
+      delayAfterMs: i + 1 < sorted.length ? Math.max(GAP_MS, sorted[i + 1].t - e.t) : GAP_MS,
+    }));
+  }
+
+  /** A C string literal for s: quotes, backslashes, control and non-ASCII characters escaped. */
+  function cLiteral(s) {
+    const bytes = typeof TextEncoder !== "undefined" ? new TextEncoder().encode(String(s)) : Buffer.from(String(s), "utf8");
+    let out = '"';
+    for (const b of bytes) {
+      if (b === 0x22) out += '\\"';
+      else if (b === 0x5c) out += "\\\\";
+      else if (b === 0x0d) out += "\\r";
+      else if (b === 0x0a) out += "\\n";
+      else if (b === 0x09) out += "\\t";
+      else if (b < 0x20 || b > 0x7e) out += "\\" + b.toString(8).padStart(3, "0");
+      else out += String.fromCharCode(b);
+    }
+    return out + '"';
+  }
+
+  const api = { VARIANTS, SETTINGS, indexSketch, readClassic, translateCustom, cLiteral };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.MigrateClassic = api;
 })(this);
