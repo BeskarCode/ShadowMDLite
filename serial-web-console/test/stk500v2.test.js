@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const { Stk500v2, flashMega } = require("../lib/stk500v2.js");
 const { FakeBootloader } = require("./fake-bootloader.js");
 
-const FAST = { resetDelayMs: 0, syncTimeoutMs: 5, timeoutMs: 20 };
+const FAST = { resetDelayMs: 0, bootWaitMs: 0, syncTimeoutMs: 5, timeoutMs: 20 };
 
 function image(size) {
   const img = new Uint8Array(size);
@@ -114,4 +114,24 @@ test("a bad answer checksum is reported, not trusted", async () => {
   };
   const stk = new Stk500v2(fake, FAST);
   await rejectsWith(stk.readSignature(), "bad-checksum");
+});
+
+test("first sign-on waits for the chip to boot after reset (real Mega lost a sign-on sent 50 ms after DTR)", async () => {
+  const fake = new FakeBootloader();
+  let dtrOnAt = null;
+  let firstWriteAt = null;
+  const t = {
+    write: (u8) => {
+      if (firstWriteAt === null) firstWriteAt = Date.now();
+      return fake.write(u8);
+    },
+    read: (n, ms) => fake.read(n, ms),
+    setDTR: (on) => {
+      if (on) dtrOnAt = Date.now();
+      return fake.setDTR(on);
+    },
+    drain: () => fake.drain(),
+  };
+  await flashMega(t, image(256), () => {}, { resetDelayMs: 0, syncTimeoutMs: 5, timeoutMs: 20 });
+  assert.ok(firstWriteAt - dtrOnAt >= 200, "first sign-on " + (firstWriteAt - dtrOnAt) + " ms after DTR on, needs >= 200 ms");
 });

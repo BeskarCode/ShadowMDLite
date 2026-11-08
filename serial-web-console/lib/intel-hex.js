@@ -3,7 +3,8 @@
  * Plain script (no modules) so index.html still opens from file://.
  *
  * parseIntelHex(text) -> { bytes: Uint8Array (from address 0, gaps = 0xFF), size }
- * Errors carry .code: "bad-line" | "bad-checksum" | "too-big" | "empty".
+ * Errors carry .code: "bad-line" | "bad-checksum" | "too-big" | "empty" | "truncated"
+ * (data but no type-01 end-of-file record: the file was cut short).
  */
 (function (root) {
   "use strict";
@@ -22,6 +23,7 @@
     let size = 0;
     let base = 0;
     let sawData = false;
+    let sawEof = false;
     const lines = String(text == null ? "" : text).split(/\r?\n|\r/);
 
     for (let n = 0; n < lines.length; n++) {
@@ -51,6 +53,7 @@
         if (count > 0) sawData = true;
         if (addr + count > size) size = addr + count;
       } else if (type === 0x01) {
+        sawEof = true;
         break;
       } else if (type === 0x02) {
         if (count !== 2) throw fail("bad-line", where + ": bad extended segment address record");
@@ -66,6 +69,7 @@
     }
 
     if (!sawData) throw fail("empty", "the file has no data");
+    if (!sawEof) throw fail("truncated", "the file has no end record (:00000001FF): it was cut short");
     return { bytes: buf.slice(0, size), size };
   }
 
