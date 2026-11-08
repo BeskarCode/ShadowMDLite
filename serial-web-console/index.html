@@ -438,6 +438,43 @@
     .flash-msg.ok { border-color: var(--ok); color: var(--ok); }
     .flash-msg.bad { border-color: var(--err); }
     .flash-msg.bad p:first-child { color: var(--err); font-weight: 600; }
+    /* Font Awesome Free 6.7.2 (solid), vendored for offline use. Icons are ::before glyphs so the
+       i18n code can keep replacing the button text. Licence: vendor/fontawesome-6.7.2/LICENSE.txt */
+    @font-face { font-family: "FA Solid"; font-style: normal; font-weight: 900; font-display: block;
+      src: url("vendor/fontawesome-6.7.2/fa-solid-900.woff2") format("woff2"); }
+    .ic::before, .ic-after::after { font-family: "FA Solid"; font-weight: 900; font-style: normal;
+      display: inline-block; width: 1.15em; text-align: center; -webkit-font-smoothing: antialiased; }
+    .ic::before { margin-right: 0.4em; }
+    .ic-after::after { margin-left: 0.4em; content: "\f054"; }
+    #btnConnect::before { content: "\f1e6"; }
+    #btnDisconnect::before { content: "\f127"; }
+    #btnSend::before { content: "\f1d8"; }
+    #btnSendPos::before { content: "\f1d8"; }
+    #btnClearLog::before { content: "\f12d"; }
+    #flashPick::before { content: "\f07c"; }
+    #flashGo::before { content: "\f0e7"; }
+    #flashCancel::before { content: "\f00d"; }
+    #zonePrev::before { content: "\f053"; }
+    #edToggle::before { content: "\f044"; }
+    #edAdd::before { content: "\2b"; }
+    #edMove::before { content: "\f601"; }
+    #edDelete::before { content: "\f2ed"; }
+    #edExport::before { content: "\f56e"; }
+    #edImport::before { content: "\f56f"; }
+    #edExample::before { content: "\f518"; }
+    #edEmpty::before { content: "\f15b"; }
+    #btnSaveOpen::before { content: "\f0c7"; }
+    #btnSaveClosed::before { content: "\f0c7"; }
+    #btnPanelOpen::before { content: "\f52b"; }
+    #btnPanelClose::before { content: "\f52a"; }
+    #btnCenterServos::before { content: "\f05b"; }
+    #btnCenterAllHolos::before { content: "\f140"; }
+    #flashPanel > summary::before { content: "\f2db"; }
+    .routing-help > summary::before { content: "\f4d7"; }
+    .blueprint-panel > h2::before { content: "\f544"; }
+    #edTitleH::before { content: "\f12e"; }
+    .col-console > .col-title::before { content: "\f120"; }
+    .col-config > .col-title::before { content: "\f1de"; }
   </style>
 </head>
 <body>
@@ -459,7 +496,7 @@
 
   <div class="app-main">
     <div class="col-console">
-      <p class="col-title" data-i18n="colConsole">Console & connection</p>
+      <p class="ic col-title" data-i18n="colConsole">Console & connection</p>
   <div class="panel">
     <div class="row">
       <div>
@@ -472,8 +509,8 @@
           <option>115200</option>
         </select>
       </div>
-      <button type="button" class="btn-ok" id="btnConnect" data-i18n="btnConnect">Connect port…</button>
-      <button type="button" class="btn-warn" id="btnDisconnect" disabled data-i18n="btnDisconnect">Disconnect</button>
+      <button type="button" class="ic btn-ok" id="btnConnect" data-i18n="btnConnect">Connect port…</button>
+      <button type="button" class="ic btn-warn" id="btnDisconnect" disabled data-i18n="btnDisconnect">Disconnect</button>
     </div>
     <div id="status" data-i18n="statusDisconnected">Not connected.</div>
   </div>
@@ -492,7 +529,7 @@
       </div>
     </div>
     <details class="routing-help">
-      <summary data-i18n="routingHelpSummary">Command routing — quick reference</summary>
+      <summary class="ic" data-i18n="routingHelpSummary">Command routing — quick reference</summary>
       <p class="hint" data-i18n-html="routingHint"></p>
     </details>
     <div class="checks row">
@@ -502,8 +539,8 @@
     <label for="cmd" data-i18n="labelCmd">Command (one or more lines; each Send transmits the block)</label>
     <textarea id="cmd" data-i18n-placeholder="cmdPlaceholder" placeholder="*ON00&#10;@0T1&#10;"></textarea>
     <div class="row" style="margin-top: 0.75rem;">
-      <button type="button" class="btn-primary" id="btnSend" disabled data-i18n="btnSend">Send</button>
-      <button type="button" class="btn-ghost" id="btnClearLog" data-i18n="btnClearLog">Clear log</button>
+      <button type="button" class="ic btn-primary" id="btnSend" disabled data-i18n="btnSend">Send</button>
+      <button type="button" class="ic btn-ghost" id="btnClearLog" data-i18n="btnClearLog">Clear log</button>
     </div>
     <div class="console-log-block">
       <strong style="font-size: 0.85rem; color: var(--muted);" data-i18n="receivedLabel">Received</strong>
@@ -512,10 +549,10 @@
   </div>
 
   <details class="panel flash-panel" id="flashPanel">
-    <summary data-i18n="flashTitle">Flash the Mega</summary>
+    <summary class="ic" data-i18n="flashTitle">Flash the Mega</summary>
     <p class="hint" data-i18n-html="flashIntro"></p>
     <div class="row">
-      <button type="button" class="btn-ghost" id="flashPick" data-i18n="flashPick">Choose .hex file…</button>
+      <button type="button" class="ic btn-ghost" id="flashPick" data-i18n="flashPick">Choose .hex file…</button>
       <input type="file" id="flashFile" accept=".hex,.ihex,text/plain" hidden />
     </div>
     <div class="flash-summary" id="flashSummary" hidden>
@@ -533,17 +570,17 @@
       <p id="flashPhaseText"></p>
     </div>
     <div class="row" id="flashBtns" hidden>
-      <button type="button" class="btn-warn" id="flashGo" data-i18n="flashBtn">Flash</button>
-      <button type="button" class="btn-ghost" id="flashCancel" data-i18n="flashCancel">Cancel</button>
+      <button type="button" class="ic btn-warn" id="flashGo" data-i18n="flashBtn">Flash</button>
+      <button type="button" class="ic btn-ghost" id="flashCancel" data-i18n="flashCancel">Cancel</button>
     </div>
     <div class="flash-msg" id="flashMsg" hidden></div>
   </details>
     </div>
 
     <div class="col-config">
-      <p class="col-title" data-i18n="colConfig">Configuration · blueprint</p>
+      <p class="ic col-title" data-i18n="colConfig">Configuration · blueprint</p>
   <div class="panel blueprint-panel">
-    <h2 data-i18n="h2Blueprint">R2-D2 blueprint · image-based calibration</h2>
+    <h2 class="ic" data-i18n="h2Blueprint">R2-D2 blueprint · image-based calibration</h2>
     <div class="blueprint-layout">
       <div class="blueprint-stage" id="blueprintStage">
         <div class="r2view" id="r2view"><canvas aria-label="R2-D2 in 3D: click a numbered marker to pick the zone"></canvas></div>
@@ -564,14 +601,14 @@
         <label for="zoneSelect" data-i18n="labelZoneSelect">Active zone</label>
         <select id="zoneSelect"></select>
         <div class="zone-nav">
-          <button type="button" class="btn-ghost" id="zonePrev" data-i18n="zonePrev">◀ Previous</button>
-          <button type="button" class="btn-ghost" id="zoneNext" data-i18n="zoneNext">Next ▶</button>
+          <button type="button" class="ic btn-ghost" id="zonePrev" data-i18n="zonePrev">◀ Previous</button>
+          <button type="button" class="ic-after btn-ghost" id="zoneNext" data-i18n="zoneNext">Next ▶</button>
         </div>
         <div class="zone-nav">
-          <button type="button" class="btn-ghost" id="edToggle" data-i18n="edToggle">Edit parts</button>
+          <button type="button" class="ic btn-ghost" id="edToggle" data-i18n="edToggle">Edit parts</button>
         </div>
         <div class="marker-editor" id="markerEditor" hidden>
-          <h3 data-i18n="edTitle">Droid parts</h3>
+          <h3 class="ic" id="edTitleH" data-i18n="edTitle">Droid parts</h3>
           <p class="hint" id="edHint" data-i18n="edHint">Each change is saved in this browser as soon as it is valid.</p>
           <div class="ed-grid" id="edFields">
             <div><label for="edName" data-i18n="edNameEn">Name (English)</label><input type="text" id="edName" maxlength="60" /></div>
@@ -587,15 +624,15 @@
           </div>
           <p class="ed-error" id="edError" hidden></p>
           <div class="ed-buttons">
-            <button type="button" class="btn-ok" id="edAdd" data-i18n="edAdd">Add part</button>
-            <button type="button" class="btn-ghost" id="edMove" data-i18n="edMove">Place on R2</button>
-            <button type="button" class="btn-warn" id="edDelete" data-i18n="edDelete">Delete</button>
+            <button type="button" class="ic btn-ok" id="edAdd" data-i18n="edAdd">Add part</button>
+            <button type="button" class="ic btn-ghost" id="edMove" data-i18n="edMove">Place on R2</button>
+            <button type="button" class="ic btn-warn" id="edDelete" data-i18n="edDelete">Delete</button>
           </div>
           <div class="ed-buttons">
-            <button type="button" class="btn-ghost" id="edExport" data-i18n="edExport">Export file</button>
-            <button type="button" class="btn-ghost" id="edImport" data-i18n="edImport">Import file</button>
-            <button type="button" class="btn-ghost" id="edExample" data-i18n="edExample">Load example</button>
-            <button type="button" class="btn-ghost" id="edEmpty" data-i18n="edEmpty">Start empty</button>
+            <button type="button" class="ic btn-ghost" id="edExport" data-i18n="edExport">Export file</button>
+            <button type="button" class="ic btn-ghost" id="edImport" data-i18n="edImport">Import file</button>
+            <button type="button" class="ic btn-ghost" id="edExample" data-i18n="edExample">Load example</button>
+            <button type="button" class="ic btn-ghost" id="edEmpty" data-i18n="edEmpty">Start empty</button>
             <input type="file" id="edImportFile" accept=".json,application/json" hidden />
           </div>
           <div class="ed-prompt" id="edPrompt" hidden><p id="edPromptText"></p><div id="edPromptBtns"></div></div>
@@ -604,12 +641,8 @@
         <p class="hint is-hidden" id="holoNoServos" data-i18n="holoNoServos">This holo has no servos (light only).</p>
         <div class="row servo-ctl" style="margin-top: 0.25rem; align-items: flex-end; gap: 0.75rem;">
           <span class="hint" id="holoLiveHint" style="flex: 1; margin: 0; display: none;" data-i18n-title="holoLiveTitle" data-i18n-html="holoLiveHint"></span>
-          <button type="button" class="btn-ok need-serial" id="btnSaveOpen" disabled data-i18n-title="titleSaveMax">
-            Save MAX
-          </button>
-          <button type="button" class="btn-warn need-serial" id="btnSaveClosed" disabled data-i18n-title="titleSaveMin">
-            Save MIN
-          </button>
+          <button type="button" class="ic btn-ok need-serial" id="btnSaveOpen" disabled data-i18n-title="titleSaveMax">Save MAX</button>
+          <button type="button" class="ic btn-warn need-serial" id="btnSaveClosed" disabled data-i18n-title="titleSaveMin">Save MIN</button>
           <label for="holoSaveAxis" class="holo-axis-ctl" style="margin: 0;" data-i18n="labelHolo">Holo</label>
           <select id="holoSaveAxis" class="need-serial holo-axis-ctl" data-i18n-title="titleHoloSaveAxis">
             <option value="hv" selected>H+V</option>
@@ -628,22 +661,14 @@
         </div>
         <label class="servo-ctl" style="margin-top: 0.75rem;"><input type="checkbox" id="autoSend" checked /> <span data-i18n="chkAutoSend">Send automatically when moving the slider</span></label>
         <div class="row servo-ctl" style="margin-top: 0.75rem;">
-          <button type="button" class="btn-primary need-serial" id="btnSendPos" disabled data-i18n="btnSend">Send</button>
+          <button type="button" class="ic btn-primary need-serial" id="btnSendPos" disabled data-i18n="btnSend">Send</button>
         </div>
         <div class="blueprint-actions">
           <span class="btn-row-label" data-i18n="quickActionsLabel">Quick actions (active zone)</span>
-          <button type="button" class="btn-ok need-serial" id="btnPanelOpen" disabled data-i18n="btnOpenPanel">
-            Open panel
-          </button>
-          <button type="button" class="btn-warn need-serial" id="btnPanelClose" disabled data-i18n="btnClosePanel">
-            Close panel
-          </button>
-          <button type="button" class="btn-ghost need-serial servo-ctl" id="btnCenterServos" disabled data-i18n="btnCenter">
-            Center
-          </button>
-          <button type="button" class="btn-ghost need-serial" id="btnCenterAllHolos" disabled data-i18n="btnCenterAllHolos">
-            Center all (*CH00)
-          </button>
+          <button type="button" class="ic btn-ok need-serial" id="btnPanelOpen" disabled data-i18n="btnOpenPanel">Open panel</button>
+          <button type="button" class="ic btn-warn need-serial" id="btnPanelClose" disabled data-i18n="btnClosePanel">Close panel</button>
+          <button type="button" class="ic btn-ghost need-serial servo-ctl" id="btnCenterServos" disabled data-i18n="btnCenter">Center</button>
+          <button type="button" class="ic btn-ghost need-serial" id="btnCenterAllHolos" disabled data-i18n="btnCenterAllHolos">Center all (*CH00)</button>
         </div>
       </div>
     </div>
