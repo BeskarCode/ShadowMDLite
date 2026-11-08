@@ -54,10 +54,8 @@
       order: -1;            /* logo on the left, title and language on the right */
       margin-right: auto;
     }
-    /* Logo de Astromech Spain (blanco, para fondo oscuro), enlaza a su web */
-    .page-header img.logo-astromech-spain {
-      height: 40px;
-    }
+    /* The logo links to the Astromech Spain website; the link is the flex item, so it takes the place */
+    .page-header a.logo-link { order: -1; margin-right: auto; display: block; }
     /* SVG incrustado: evita fallos al abrir index.html como archivo (file://) */
     .logo-shadowmd {
       height: 48px;
@@ -151,7 +149,7 @@
     }
     .panel-console {
       flex: 1;
-      min-height: 0;
+      min-height: auto; /* never shrink below its content (the flash panel sits below it) */
       display: flex;
       flex-direction: column;
     }
@@ -327,16 +325,103 @@
     }
     .hotspot:hover .hotspot-label,
     .hotspot.selected .hotspot-label { opacity: 1; }
-    .routing-help { margin: 0 0 0.75rem; }
-    .routing-help summary {
-      cursor: pointer;
-      font-size: 0.8rem;
-      color: var(--muted);
-      padding: 0.15rem 0;
-      user-select: none;
+    /* First-run guide (modal) */
+    dialog.onb { width: min(44rem, calc(100vw - 2rem)); }
+    .onb-head { display: flex; flex-direction: column; gap: 0.75rem; padding: 1rem 1.25rem 0.75rem; border-bottom: 1px solid var(--border); }
+    .onb-head img { height: 35px; width: auto; align-self: flex-start; }
+    .onb-steps { display: flex; flex-wrap: wrap; gap: 0.35rem; list-style: none; margin: 0; padding: 0; font-size: 0.72rem; }
+    .onb-steps li { padding: 0.15rem 0.55rem; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); }
+    .onb-steps li.active { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+    .onb-steps li.done { border-color: var(--ok); color: var(--ok); }
+    dialog.onb h2 { margin: 0 0 0.4rem; font-size: 1.15rem; }
+    .onb-text { margin: 0 0 1rem; font-size: 0.9rem; }
+    .onb-pane[hidden], .onb [hidden] { display: none; }
+    .onb-choices { display: flex; flex-direction: column; gap: 0.5rem; align-items: stretch; }
+    dialog.onb textarea { margin-bottom: 0.6rem; font-size: 0.8rem; }
+    .onb-summary { margin: 0 0 0.75rem; padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); font-size: 0.85rem; }
+    .onb-summary.bad { border-color: var(--err); }
+    .onb-downloads { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; }
+    .onb-howto { margin: 0 0 0.75rem; padding-left: 1.25rem; font-size: 0.85rem; }
+    .onb-skip { margin: 1rem 0 0; text-align: right; }
+    .onb-skip button { font-size: 0.8rem; padding: 0.3rem 0.7rem; }
+    #toolGuide::before { content: "\f14e"; }
+    /* Guided channel walk: a non-modal card (the R2 behind it must stay clickable) */
+    dialog.walk-card {
+      position: fixed;
+      inset: auto auto 1rem 1rem;
+      margin: 0;
+      width: min(24rem, calc(100vw - 2rem));
+      max-height: calc(100vh - 2rem);
+      overflow-y: auto;
+      padding: 0;
+      z-index: 50;
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--accent);
+      border-radius: 10px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
     }
-    .routing-help summary:hover { color: var(--accent); }
-    .routing-help .hint { margin: 0.4rem 0 0; }
+    .walk-card [hidden] { display: none; }
+    .walk-card .grid3 { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 0.5rem; align-items: end; margin-bottom: 0.75rem; }
+    .walk-card .grid3 > div { display: flex; flex-direction: column; min-width: 0; }
+    .walk-card input[type="number"] { width: 100%; }
+    .walk-ch { font-size: 1.15rem; font-weight: 600; margin: 0 0 0.25rem; }
+    .walk-has { margin: 0 0 0.5rem; color: var(--muted); font-size: 0.85rem; }
+    .walk-look { margin: 0 0 0.75rem; font-size: 0.85rem; }
+    .walk-look.placed { color: var(--ok); }
+    .walk-name { display: flex; flex-direction: column; margin-bottom: 0.75rem; }
+    .walk-name input { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 0.6rem; font-size: 0.95rem; }
+    .walk-card .row button { padding: 0.4rem 0.75rem; font-size: 0.85rem; }
+    #toolWalk::before, #walkTitleH::before { content: "\f54b"; }
+    #walkStart::before { content: "\f04b"; }
+    #walkRepeat::before { content: "\f2f9"; }
+    #walkNext::before { content: "\f04e"; }
+    #walkFinish::before { content: "\f11e"; }
+    /* Which firmware the console needs, with links to the guides */
+    .compat-note {
+      flex-shrink: 0;
+      margin: 0 0 0.65rem;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.85rem;
+      border: 1px solid var(--warn);
+      border-left-width: 4px;
+      border-radius: 6px;
+      background: var(--panel);
+    }
+    .compat-note::before { content: "\f05a"; color: var(--warn); }
+    .compat-note a { color: var(--accent); }
+    /* Toolbar in the header: opens the windows (dialogs) and the parts editor */
+    .tools { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .tools button { padding: 0.45rem 0.85rem; font-size: 0.85rem; }
+    /* Windows (native <dialog>, modal: Esc or the X closes them) */
+    dialog.modal {
+      width: min(36rem, calc(100vw - 2rem));
+      max-height: calc(100vh - 2rem);
+      overflow-y: auto;
+      padding: 0;
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+    }
+    dialog.modal a, .walk-card a { color: var(--accent); }
+    dialog.modal::backdrop { background: rgba(5, 8, 12, 0.65); }
+    .modal-head {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.85rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      background: var(--panel);
+    }
+    .modal-head h2 { flex: 1; margin: 0; font-size: 1rem; font-weight: 600; }
+    .modal-close { background: transparent; color: var(--muted); padding: 0.3rem 0.55rem; font-size: 1rem; }
+    .modal-close:hover:not(:disabled) { color: var(--text); }
+    .modal-body { padding: 1rem 1.25rem 1.25rem; }
+    .modal-body > .hint:first-child { margin-top: 0; }
     .blueprint-controls label { display: block; margin-top: 0.65rem; margin-bottom: 0.25rem; }
     .blueprint-controls input[type="range"] {
       width: 100%;
@@ -365,10 +450,131 @@
     .wrap-slider-v.is-hidden,
     label.wrap-slider-v.is-hidden { display: none !important; }
     select:disabled { opacity: 0.5; cursor: not-allowed; }
+    .is-hidden { display: none !important; }
+    /* Part editor (behind the pencil of the 3D view) */
+    .marker-editor {
+      margin-top: 0.75rem;
+      padding: 0.75rem;
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      background: var(--bg);
+    }
+    .marker-editor[hidden] { display: none; }
+    .marker-editor h3 { font-size: 0.9rem; margin: 0 0 0.25rem; }
+    .marker-editor .hint { margin: 0 0 0.5rem; }
+    .marker-editor .ed-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 0.6rem; }
+    .marker-editor .ed-grid > div { display: flex; flex-direction: column; min-width: 0; }
+    .marker-editor .ed-grid label { display: block; margin: 0 0 0.15rem; }
+    .marker-editor input[type="text"] {
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.35rem 0.5rem;
+      font-size: 0.9rem;
+      width: 100%;
+    }
+    .marker-editor select { padding: 0.35rem 0.5rem; font-size: 0.9rem; background: var(--panel); }
+    .marker-editor input.ed-bad { border-color: var(--err); }
+    .marker-editor .ed-axes { display: flex; gap: 1rem; align-items: center; }
+    .marker-editor .ed-axes label { display: flex; align-items: center; gap: 0.3rem; color: var(--text); margin: 0; }
+    .marker-editor .ed-buttons { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.6rem; }
+    .marker-editor .ed-buttons button { flex: 1 1 auto; padding: 0.35rem 0.6rem; font-size: 0.8rem; }
+    .ed-error { color: var(--err); font-size: 0.8rem; margin: 0.4rem 0 0; font-weight: 600; }
+    .ed-msg { font-size: 0.8rem; margin: 0.4rem 0 0; color: var(--ok); }
+    .ed-msg.bad { color: var(--err); font-weight: 600; }
+    .ed-prompt {
+      margin-top: 0.6rem;
+      padding: 0.5rem 0.6rem;
+      border: 1px solid var(--warn);
+      border-radius: 6px;
+    }
+    .ed-prompt[hidden] { display: none; }
+    .ed-prompt p { margin: 0 0 0.4rem; font-size: 0.85rem; }
+    .ed-prompt div { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+    .ed-prompt button { padding: 0.3rem 0.7rem; font-size: 0.8rem; }
+    /* Flash the Mega */
+    .flash-panel [hidden] { display: none; }
+    .flash-summary p { margin: 0 0 0.4rem; font-size: 0.85rem; overflow-wrap: anywhere; }
+    .flash-warn { color: var(--warn); font-weight: 600; }
+    .flash-progress { margin: 0 0 0.75rem; }
+    .flash-phases {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      list-style: none;
+      margin: 0 0 0.5rem;
+      padding: 0;
+      font-size: 0.75rem;
+    }
+    .flash-phases li {
+      padding: 0.15rem 0.55rem;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+    }
+    .flash-phases li.active { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+    .flash-phases li.done { border-color: var(--ok); color: var(--ok); }
+    .flash-phases li.failed { border-color: var(--err); color: var(--err); font-weight: 600; }
+    #flashBar { width: 100%; height: 0.8rem; accent-color: var(--accent); }
+    #flashPhaseText { margin: 0.3rem 0 0; font-size: 0.8rem; color: var(--muted); }
+    .flash-msg { font-size: 0.85rem; padding: 0.5rem 0.75rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); }
+    .flash-msg p { margin: 0 0 0.3rem; }
+    .flash-msg p:last-child { margin-bottom: 0; }
+    .flash-msg.ok { border-color: var(--ok); color: var(--ok); }
+    .flash-msg.bad { border-color: var(--err); }
+    .flash-msg.bad p:first-child { color: var(--err); font-weight: 600; }
+    /* Font Awesome Free 6.7.2 (solid), vendored for offline use. Icons are ::before glyphs so the
+       i18n code can keep replacing the button text. Licence: vendor/fontawesome-6.7.2/LICENSE.txt */
+    @font-face { font-family: "FA Solid"; font-style: normal; font-weight: 900; font-display: block;
+      src: url("vendor/fontawesome-6.7.2/fa-solid-900.woff2") format("woff2"); }
+    .ic::before, .ic-after::after { font-family: "FA Solid"; font-weight: 900; font-style: normal;
+      display: inline-block; width: 1.15em; text-align: center; -webkit-font-smoothing: antialiased; }
+    .ic::before { margin-right: 0.4em; }
+    .ic-after::after { margin-left: 0.4em; content: "\f054"; }
+    #btnConnect::before { content: "\f1e6"; }
+    #btnDisconnect::before { content: "\f127"; }
+    #btnSend::before { content: "\f1d8"; }
+    #btnSendPos::before { content: "\f1d8"; }
+    #btnClearLog::before { content: "\f12d"; }
+    #btnJoyPair::before { content: "\f11b"; }
+    #flashPick::before { content: "\f07c"; }
+    #flashGo::before { content: "\f0e7"; }
+    #flashCancel::before { content: "\f00d"; }
+    #zonePrev::before { content: "\f053"; }
+    #edToggle::before { content: "\f044"; }
+    #edAdd::before { content: "\2b"; }
+    #edMove::before { content: "\f601"; }
+    #edDelete::before { content: "\f2ed"; }
+    #edExport::before { content: "\f56e"; }
+    #edImport::before { content: "\f56f"; }
+    #edExample::before { content: "\f518"; }
+    #edEmpty::before { content: "\f15b"; }
+    #btnSaveOpen::before { content: "\f0c7"; }
+    #btnSaveClosed::before { content: "\f0c7"; }
+    #btnPanelOpen::before { content: "\f52b"; }
+    #btnPanelClose::before { content: "\f52a"; }
+    #btnCenterServos::before { content: "\f05b"; }
+    #btnCenterAllHolos::before { content: "\f140"; }
+    #toolFlash::before, #flashTitleH::before { content: "\f2db"; }
+    #toolRouting::before, #routingTitleH::before { content: "\f4d7"; }
+    #toolParts::before { content: "\f12e"; }
+    .modal-close::before { content: "\f00d"; margin-right: 0; }
+    .blueprint-panel > h2::before { content: "\f544"; }
+    #edTitleH::before { content: "\f12e"; }
+    .col-console > .col-title::before { content: "\f120"; }
+    .col-config > .col-title::before { content: "\f1de"; }
   </style>
 </head>
 <body>
   <header class="page-header">
+    <nav class="tools" aria-label="Tools">
+      <button type="button" class="ic btn-ghost" id="toolGuide" data-i18n="toolGuide">Guide</button>
+      <button type="button" class="ic btn-ghost" id="toolFlash" data-i18n="toolFlash">Flash the Mega</button>
+      <button type="button" class="ic btn-ghost" id="toolParts" data-i18n="toolParts">Droid parts</button>
+      <button type="button" class="ic btn-ghost" id="toolWalk" data-i18n="toolWalk">Channel walk</button>
+      <button type="button" class="ic btn-ghost" id="toolRouting" data-i18n="toolRouting">Command routing</button>
+    </nav>
     <div class="titles">
       <h1 data-i18n="h1Title">Serial console (USB)</h1>
       <p class="tagline">ShadowMD Lite · astromech R2-D2</p>
@@ -380,13 +586,16 @@
         </select>
       </div>
     </div>
-    <img class="logo-astromech" src="astromech-spain.png" width="314" height="50" alt="Astromech Spain · Be happy and build droids" />
+    <a class="logo-link" href="https://www.astromechspain.com/" target="_blank" rel="noopener" title="Astromech Spain">
+      <img class="logo-astromech" src="astromech-spain.png" width="314" height="50" alt="Astromech Spain · Be happy and build droids" />
+    </a>
   </header>
   <p class="sub" data-i18n-html="subIntro"></p>
+  <p class="compat-note ic" data-i18n-html="compatNote"></p>
 
   <div class="app-main">
     <div class="col-console">
-      <p class="col-title" data-i18n="colConsole">Console & connection</p>
+      <p class="ic col-title" data-i18n="colConsole">Console & connection</p>
   <div class="panel">
     <div class="row">
       <div>
@@ -399,8 +608,8 @@
           <option>115200</option>
         </select>
       </div>
-      <button type="button" class="btn-ok" id="btnConnect" data-i18n="btnConnect">Connect port…</button>
-      <button type="button" class="btn-warn" id="btnDisconnect" disabled data-i18n="btnDisconnect">Disconnect</button>
+      <button type="button" class="ic btn-ok" id="btnConnect" data-i18n="btnConnect">Connect port…</button>
+      <button type="button" class="ic btn-warn" id="btnDisconnect" disabled data-i18n="btnDisconnect">Disconnect</button>
     </div>
     <div id="status" data-i18n="statusDisconnected">Not connected.</div>
   </div>
@@ -418,10 +627,6 @@
         </select>
       </div>
     </div>
-    <details class="routing-help">
-      <summary data-i18n="routingHelpSummary">Command routing — quick reference</summary>
-      <p class="hint" data-i18n-html="routingHint"></p>
-    </details>
     <div class="checks row">
       <label><input type="checkbox" id="cr" checked /> <span data-i18n-html="chkCr"></span></label>
       <label><input type="checkbox" id="lf" /> <span data-i18n-html="chkLf"></span></label>
@@ -429,21 +634,176 @@
     <label for="cmd" data-i18n="labelCmd">Command (one or more lines; each Send transmits the block)</label>
     <textarea id="cmd" data-i18n-placeholder="cmdPlaceholder" placeholder="*ON00&#10;@0T1&#10;"></textarea>
     <div class="row" style="margin-top: 0.75rem;">
-      <button type="button" class="btn-primary" id="btnSend" disabled data-i18n="btnSend">Send</button>
-      <button type="button" class="btn-ghost" id="btnClearLog" data-i18n="btnClearLog">Clear log</button>
-      <button type="button" class="btn-ghost need-serial" id="btnJoyPair" disabled data-i18n="btnJoyPair" data-i18n-title="titleJoyPair">Pair Joy-Con</button>
+      <button type="button" class="ic btn-primary" id="btnSend" disabled data-i18n="btnSend">Send</button>
+      <button type="button" class="ic btn-ghost" id="btnClearLog" data-i18n="btnClearLog">Clear log</button>
+      <button type="button" class="ic btn-ghost need-serial" id="btnJoyPair" disabled data-i18n="btnJoyPair" data-i18n-title="titleJoyPair">Pair Joy-Con</button>
     </div>
     <div class="console-log-block">
       <strong style="font-size: 0.85rem; color: var(--muted);" data-i18n="receivedLabel">Received</strong>
       <div id="log"></div>
     </div>
   </div>
+
+
+  <dialog class="modal" id="routingDialog" aria-labelledby="routingTitleH">
+    <div class="modal-head">
+      <h2 class="ic" id="routingTitleH" data-i18n="routingHelpSummary">Command routing — quick reference</h2>
+      <button type="button" class="ic modal-close" data-close data-i18n-title="dlgClose" aria-label="Close"></button>
+    </div>
+    <div class="modal-body"><p class="hint" data-i18n-html="routingHint"></p></div>
+  </dialog>
+
+  <dialog class="modal onb" id="onbDialog" aria-labelledby="onbTitle">
+    <div class="onb-head">
+      <img src="astromech-spain.png" width="220" height="35" alt="Astromech Spain" />
+      <ol class="onb-steps" id="onbSteps"></ol>
+    </div>
+    <div class="modal-body">
+      <h2 id="onbTitle"></h2>
+      <p class="onb-text" id="onbText"></p>
+
+      <div class="onb-pane" data-step="welcome">
+        <div class="onb-choices">
+          <button type="button" class="btn-primary" id="onbStartExample" data-i18n="onbStartExample">Start from the example droid</button>
+          <button type="button" class="btn-ghost" id="onbStartEmpty" data-i18n="onbStartEmpty">Start empty</button>
+          <button type="button" class="btn-ghost" id="onbStartImport" data-i18n="onbStartImport">Import my configuration file</button>
+          <button type="button" class="btn-ok" id="onbStartKeep" data-i18n="onbStartKeep" hidden>Keep the parts I already have</button>
+        </div>
+      </div>
+
+      <div class="onb-pane" data-step="sketch">
+        <textarea id="onbIno" rows="6" data-i18n-placeholder="onbInoPlaceholder" placeholder="Paste your sketch here"></textarea>
+        <input type="file" id="onbFiles" accept=".ino,.h,.cpp,.txt" multiple hidden />
+        <div class="row">
+          <button type="button" class="btn-ghost" id="onbLoadFiles" data-i18n="onbLoadFiles">Load sketch files…</button>
+          <button type="button" class="btn-primary" id="onbAnalyze" data-i18n="onbAnalyze">Read the sketch</button>
+        </div>
+        <p class="onb-summary" id="onbSummary" hidden></p>
+        <div class="row">
+          <button type="button" class="btn-primary" id="onbSketchNext" data-i18n="onbNext" disabled>Continue</button>
+          <button type="button" class="btn-ghost" id="onbSketchSkip" data-i18n="onbSketchSkip">I don't have the sketch at hand</button>
+        </div>
+      </div>
+
+      <div class="onb-pane" data-step="patch">
+        <p class="onb-summary" id="onbPatchMsg"></p>
+        <div class="onb-downloads" id="onbPatchFiles"></div>
+        <ol class="onb-howto">
+          <li data-i18n-html="onbPatchHow1"></li>
+          <li data-i18n-html="onbPatchHow2"></li>
+          <li data-i18n-html="onbPatchHow3"></li>
+        </ol>
+        <p class="hint" data-i18n-html="onbPatchGuide"></p>
+        <div class="row">
+          <button type="button" class="btn-primary" id="onbPatchNext" data-i18n="onbNext">Continue</button>
+          <button type="button" class="btn-ghost" id="onbPatchBack" data-i18n="onbBack" hidden>Back to the sketch</button>
+        </div>
+      </div>
+
+      <div class="onb-pane" data-step="flash">
+        <div class="row">
+          <button type="button" class="btn-primary" id="onbOpenFlash" data-i18n="onbOpenFlash">Open the flash window</button>
+          <button type="button" class="btn-ghost" id="onbFlashSkip" data-i18n="onbFlashSkip">I uploaded it with the Arduino IDE</button>
+        </div>
+      </div>
+
+      <div class="onb-pane" data-step="connect">
+        <div class="row"><button type="button" class="btn-primary" id="onbConnect" data-i18n="onbConnect">Connect and test</button></div>
+        <p class="onb-summary" id="onbConnectMsg" hidden></p>
+      </div>
+
+      <div class="onb-pane" data-step="walk">
+        <div class="row">
+          <button type="button" class="btn-primary" id="onbWalkDome" data-i18n="onbWalkDome">Walk the dome</button>
+          <button type="button" class="btn-ghost" id="onbWalkBody" data-i18n="onbWalkBody">Walk the body</button>
+        </div>
+        <p class="onb-summary" id="onbWalkMsg" hidden></p>
+        <div class="row"><button type="button" class="btn-primary" id="onbWalkNext" data-i18n="onbNext">Continue</button></div>
+      </div>
+
+      <div class="onb-pane" data-step="done">
+        <div class="row">
+          <button type="button" class="btn-ok" id="onbExport" data-i18n="onbExport">Export my configuration</button>
+          <button type="button" class="btn-primary" id="onbClose" data-i18n="onbClose">Close</button>
+        </div>
+      </div>
+
+      <p class="onb-skip"><button type="button" class="btn-ghost" id="onbSkip" data-i18n="onbSkip">Skip the guide</button></p>
+    </div>
+  </dialog>
+
+  <dialog class="walk-card" id="walkDialog" aria-labelledby="walkTitleH">
+    <div class="modal-head">
+      <h2 class="ic" id="walkTitleH" data-i18n="walkTitle">Channel walk</h2>
+      <button type="button" class="ic modal-close" id="walkClose" data-i18n-title="dlgClose" aria-label="Close"></button>
+    </div>
+    <div class="modal-body">
+      <div id="walkSetup">
+        <p class="hint" data-i18n="walkIntro">The console opens and closes each channel of a board, one at a time. Watch the droid and click on R2 where the part that moved is.</p>
+        <div class="grid3">
+          <div><label for="walkBoard" data-i18n="walkBoard">Board</label>
+            <select id="walkBoard"><option value="S1:" data-i18n="walkDome">Dome (S1:)</option><option value="S3:" data-i18n="walkBody">Body (S3:)</option></select></div>
+          <div><label for="walkFrom" data-i18n="walkFrom">From</label><input type="number" id="walkFrom" min="1" max="99" value="1" /></div>
+          <div><label for="walkTo" data-i18n="walkTo">To</label><input type="number" id="walkTo" min="1" max="99" value="13" /></div>
+        </div>
+        <p class="walk-look" id="walkSetupMsg" hidden></p>
+        <div class="row"><button type="button" class="ic btn-primary" id="walkStart" data-i18n="walkStart">Start</button></div>
+      </div>
+      <div id="walkRun" hidden>
+        <p class="walk-ch" id="walkCh"></p>
+        <p class="walk-has" id="walkHas"></p>
+        <p class="walk-look" id="walkLook"></p>
+        <div class="walk-name" id="walkNameBox" hidden>
+          <label for="walkName" data-i18n="walkName">Name of this part</label>
+          <input type="text" id="walkName" maxlength="40" />
+        </div>
+        <div class="row">
+          <button type="button" class="ic btn-ghost" id="walkRepeat" data-i18n="walkRepeat">Move again</button>
+          <button type="button" class="ic btn-primary" id="walkNext" data-i18n="walkNothing">Nothing here</button>
+          <button type="button" class="ic btn-ghost" id="walkFinish" data-i18n="walkFinish">Finish</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog class="modal" id="flashDialog" aria-labelledby="flashTitleH">
+    <div class="modal-head">
+      <h2 class="ic" id="flashTitleH" data-i18n="flashTitle">Flash the Mega</h2>
+      <button type="button" class="ic modal-close" id="flashClose" data-close data-i18n-title="dlgClose" aria-label="Close"></button>
+    </div>
+    <div class="modal-body flash-panel" id="flashPanel">
+    <p class="hint" data-i18n-html="flashIntro"></p>
+    <div class="row">
+      <button type="button" class="ic btn-ghost" id="flashPick" data-i18n="flashPick">Choose .hex file…</button>
+      <input type="file" id="flashFile" accept=".hex,.ihex,text/plain" hidden />
+    </div>
+    <div class="flash-summary" id="flashSummary" hidden>
+      <p id="flashSummaryText"></p>
+      <p class="flash-warn" data-i18n="flashOverwrite">Flashing replaces the program the Mega has now.</p>
+    </div>
+    <div class="flash-progress" id="flashProgress" hidden>
+      <ol class="flash-phases">
+        <li data-phase="reset" data-i18n="flashPhaseReset">Reset</li>
+        <li data-phase="sync" data-i18n="flashPhaseSync">Bootloader</li>
+        <li data-phase="write" data-i18n="flashPhaseWrite">Write</li>
+        <li data-phase="verify" data-i18n="flashPhaseVerify">Verify</li>
+      </ol>
+      <progress id="flashBar" max="1000" value="0"></progress>
+      <p id="flashPhaseText"></p>
+    </div>
+    <div class="row" id="flashBtns" hidden>
+      <button type="button" class="ic btn-warn" id="flashGo" data-i18n="flashBtn">Flash</button>
+      <button type="button" class="ic btn-ghost" id="flashCancel" data-i18n="flashCancel">Cancel</button>
+    </div>
+    <div class="flash-msg" id="flashMsg" hidden></div>
+    </div>
+  </dialog>
     </div>
 
     <div class="col-config">
-      <p class="col-title" data-i18n="colConfig">Configuration · blueprint</p>
+      <p class="ic col-title" data-i18n="colConfig">Configuration · blueprint</p>
   <div class="panel blueprint-panel">
-    <h2 data-i18n="h2Blueprint">R2-D2 blueprint · image-based calibration</h2>
+    <h2 class="ic" data-i18n="h2Blueprint">R2-D2 blueprint · image-based calibration</h2>
     <div class="blueprint-layout">
       <div class="blueprint-stage" id="blueprintStage">
         <div class="r2view" id="r2view"><canvas aria-label="R2-D2 in 3D: click a numbered marker to pick the zone"></canvas></div>
@@ -464,49 +824,74 @@
         <label for="zoneSelect" data-i18n="labelZoneSelect">Active zone</label>
         <select id="zoneSelect"></select>
         <div class="zone-nav">
-          <button type="button" class="btn-ghost" id="zonePrev" data-i18n="zonePrev">◀ Previous</button>
-          <button type="button" class="btn-ghost" id="zoneNext" data-i18n="zoneNext">Next ▶</button>
+          <button type="button" class="ic btn-ghost" id="zonePrev" data-i18n="zonePrev">◀ Previous</button>
+          <button type="button" class="ic-after btn-ghost" id="zoneNext" data-i18n="zoneNext">Next ▶</button>
         </div>
-        <div class="row" style="margin-top: 0.25rem; align-items: flex-end; gap: 0.75rem;">
+        <div class="zone-nav">
+          <button type="button" class="ic btn-ghost" id="edToggle" data-i18n="edToggle">Edit parts</button>
+        </div>
+        <div class="marker-editor" id="markerEditor" hidden>
+          <h3 class="ic" id="edTitleH" data-i18n="edTitle">Droid parts</h3>
+          <p class="hint" id="edHint" data-i18n="edHint">Each change is saved in this browser as soon as it is valid.</p>
+          <div class="ed-grid" id="edFields">
+            <div><label for="edName" data-i18n="edNameEn">Name (English)</label><input type="text" id="edName" maxlength="60" /></div>
+            <div><label for="edNameEs" data-i18n="edNameEs">Name (Spanish)</label><input type="text" id="edNameEs" maxlength="60" /></div>
+            <div><label for="edKind" data-i18n="edKind">Type</label>
+              <select id="edKind"><option value="servo" data-i18n="optKindServo">Servo</option><option value="holo" data-i18n="optKindHolo">Holo</option></select></div>
+            <div><label for="edBoard" data-i18n="edBoard">Board</label>
+              <select id="edBoard"><option value="S1:" data-i18n="optBoardS1">Dome (S1:)</option><option value="S3:" data-i18n="optBoardS3">Body (S3:)</option></select></div>
+            <div><label for="edChannel" id="edChannelLabel">Channel</label><input type="text" id="edChannel" maxlength="2" inputmode="numeric" /></div>
+            <div id="edAxesBox"><label data-i18n="edAxes">Holo servos</label>
+              <span class="ed-axes"><label><input type="checkbox" id="edAxisH" /> <span data-i18n="edAxisH">H (horizontal)</span></label>
+              <label><input type="checkbox" id="edAxisV" /> <span data-i18n="edAxisV">V (vertical)</span></label></span></div>
+          </div>
+          <p class="ed-error" id="edError" hidden></p>
+          <div class="ed-buttons">
+            <button type="button" class="ic btn-ok" id="edAdd" data-i18n="edAdd">Add part</button>
+            <button type="button" class="ic btn-ghost" id="edMove" data-i18n="edMove">Place on R2</button>
+            <button type="button" class="ic btn-warn" id="edDelete" data-i18n="edDelete">Delete</button>
+          </div>
+          <div class="ed-buttons">
+            <button type="button" class="ic btn-ghost" id="edExport" data-i18n="edExport">Export file</button>
+            <button type="button" class="ic btn-ghost" id="edImport" data-i18n="edImport">Import file</button>
+            <button type="button" class="ic btn-ghost" id="edExample" data-i18n="edExample">Load example</button>
+            <button type="button" class="ic btn-ghost" id="edEmpty" data-i18n="edEmpty">Start empty</button>
+            <input type="file" id="edImportFile" accept=".json,application/json" hidden />
+          </div>
+          <div class="ed-prompt" id="edPrompt" hidden><p id="edPromptText"></p><div id="edPromptBtns"></div></div>
+          <p class="ed-msg" id="edMsg" hidden></p>
+        </div>
+        <p class="hint is-hidden" id="holoNoServos" data-i18n="holoNoServos">This holo has no servos (light only).</p>
+        <div class="row servo-ctl" style="margin-top: 0.25rem; align-items: flex-end; gap: 0.75rem;">
           <span class="hint" id="holoLiveHint" style="flex: 1; margin: 0; display: none;" data-i18n-title="holoLiveTitle" data-i18n-html="holoLiveHint"></span>
-          <button type="button" class="btn-ok need-serial" id="btnSaveOpen" disabled data-i18n-title="titleSaveMax">
-            Save MAX
-          </button>
-          <button type="button" class="btn-warn need-serial" id="btnSaveClosed" disabled data-i18n-title="titleSaveMin">
-            Save MIN
-          </button>
-          <label for="holoSaveAxis" style="margin: 0;" data-i18n="labelHolo">Holo</label>
-          <select id="holoSaveAxis" class="need-serial" data-i18n-title="titleHoloSaveAxis">
+          <button type="button" class="ic btn-ok need-serial" id="btnSaveOpen" disabled data-i18n-title="titleSaveMax">Save MAX</button>
+          <button type="button" class="ic btn-warn need-serial" id="btnSaveClosed" disabled data-i18n-title="titleSaveMin">Save MIN</button>
+          <label for="holoSaveAxis" class="holo-axis-ctl" style="margin: 0;" data-i18n="labelHolo">Holo</label>
+          <select id="holoSaveAxis" class="need-serial holo-axis-ctl" data-i18n-title="titleHoloSaveAxis">
             <option value="hv" selected>H+V</option>
             <option value="h">H only</option>
             <option value="v">V only</option>
           </select>
         </div>
-        <label class="pwm-inline"><span data-i18n="pwmMinLabel">PWM min.</span> <input type="number" id="pwmMin" value="800" min="0" max="4095" step="1" /> <span data-i18n="pwmMaxLabel">max.</span> <input type="number" id="pwmMax" value="2200" min="0" max="4095" step="1" /></label>
+        <label class="pwm-inline servo-ctl"><span data-i18n="pwmMinLabel">PWM min.</span> <input type="number" id="pwmMin" value="800" min="0" max="4095" step="1" /> <span data-i18n="pwmMaxLabel">max.</span> <input type="number" id="pwmMax" value="2200" min="0" max="4095" step="1" /></label>
+        <div class="servo-ctl" id="wrapSliderH">
         <label id="labelSliderH"><span id="labelSliderHPref">PWM servo</span> — <span class="slider-val" id="valH">1500</span></label>
         <input type="range" id="sliderH" class="need-serial" min="500" max="2500" value="1500" disabled />
-        <div class="wrap-slider-v" id="wrapSliderV">
+        </div>
+        <div class="wrap-slider-v servo-ctl" id="wrapSliderV">
         <label><span data-i18n="labelSliderVPrefix">Vertical servo (V)</span> — <span class="slider-val" id="valV">1500</span></label>
         <input type="range" id="sliderV" class="need-serial" min="500" max="2500" value="1500" disabled />
         </div>
-        <label style="margin-top: 0.75rem;"><input type="checkbox" id="autoSend" checked /> <span data-i18n="chkAutoSend">Send automatically when moving the slider</span></label>
-        <div class="row" style="margin-top: 0.75rem;">
-          <button type="button" class="btn-primary need-serial" id="btnSendPos" disabled data-i18n="btnSend">Send</button>
+        <label class="servo-ctl" style="margin-top: 0.75rem;"><input type="checkbox" id="autoSend" checked /> <span data-i18n="chkAutoSend">Send automatically when moving the slider</span></label>
+        <div class="row servo-ctl" style="margin-top: 0.75rem;">
+          <button type="button" class="ic btn-primary need-serial" id="btnSendPos" disabled data-i18n="btnSend">Send</button>
         </div>
         <div class="blueprint-actions">
           <span class="btn-row-label" data-i18n="quickActionsLabel">Quick actions (active zone)</span>
-          <button type="button" class="btn-ok need-serial" id="btnPanelOpen" disabled data-i18n="btnOpenPanel">
-            Open panel
-          </button>
-          <button type="button" class="btn-warn need-serial" id="btnPanelClose" disabled data-i18n="btnClosePanel">
-            Close panel
-          </button>
-          <button type="button" class="btn-ghost need-serial" id="btnCenterServos" disabled data-i18n="btnCenter">
-            Center
-          </button>
-          <button type="button" class="btn-ghost need-serial" id="btnCenterAllHolos" disabled data-i18n="btnCenterAllHolos">
-            Center all (*CH00)
-          </button>
+          <button type="button" class="ic btn-ok need-serial" id="btnPanelOpen" disabled data-i18n="btnOpenPanel">Open panel</button>
+          <button type="button" class="ic btn-warn need-serial" id="btnPanelClose" disabled data-i18n="btnClosePanel">Close panel</button>
+          <button type="button" class="ic btn-ghost need-serial servo-ctl" id="btnCenterServos" disabled data-i18n="btnCenter">Center</button>
+          <button type="button" class="ic btn-ghost need-serial" id="btnCenterAllHolos" disabled data-i18n="btnCenterAllHolos">Center all (*CH00)</button>
         </div>
       </div>
     </div>
@@ -520,49 +905,47 @@
   <script src="vendor/three-r147/OrbitControls.js"></script>
   <script src="vendor/three-r147/RoomEnvironment.js"></script>
   <script src="vendor/r2d2-model.js"></script>
+  <script src="lib/droid-config.js"></script>
+  <script src="lib/intel-hex.js"></script>
+  <script src="lib/stk500v2.js"></script>
+  <script src="lib/webserial-transport.js"></script>
+  <script src="lib/channel-walk.js"></script>
+  <script src="lib/ino-detect.js"></script>
+  <script src="lib/ino-patch.js"></script>
+  <script src="lib/onboarding.js"></script>
   <script>
     /**
      * ShadowMD: body → prefijo S3:, dome/holos → S1: (ver combo serialTarget / inferSerialTargetFromZone).
      * Servos panel (b* body + s* dome): mismos comandos Marcduino :MV/:OP/:CL y #SO/#SC (xx = mdPanel). Solo cambia el prefijo serie (body S3:, dome S1:).
      * Holo: *MHxxdddd/*MVxxdddd; EEPROM #HO/#HC (H máx/mín), #VO/#VC (V máx/mín); *CHxx centrar (BetterDuino).
      */
-    const R2_BLUEPRINT_ZONES = [
-      // Markers aligned with the reference blueprint image.
-      { id: "s0", label: "Panel 4 (Lower Panel)", labelEs: "Panel 4 (panel inferior)", kind: "servo", servoIndex: 0, mdPanel: "04", target: "S1:", map: { left: 95.19, top: 26.94, w: 3.2, h: 3.2 } },
-      { id: "s1", label: "Panel 3 (Lower Panel)", labelEs: "Panel 3 (panel inferior)", kind: "servo", servoIndex: 1, mdPanel: "03", target: "S1:", map: { left: 94.6, top: 31.6, w: 3.2, h: 3.2 } },
-      { id: "s2", label: "Panel 2 (Lower Panel)", labelEs: "Panel 2 (panel inferior)", kind: "servo", servoIndex: 2, mdPanel: "02", target: "S1:", map: { left: 91.7, top: 35.7, w: 3.2, h: 3.2 } },
-      { id: "s3", label: "Panel 1 (Lower Panel)", labelEs: "Panel 1 (panel inferior)", kind: "servo", servoIndex: 3, mdPanel: "01", target: "S1:", map: { left: 88.37, top: 38.94, w: 3.2, h: 3.2 } },
-      { id: "s4", label: "Panel 5 (Lower Panel)", labelEs: "Panel 5 (panel inferior)", kind: "servo", servoIndex: 4, mdPanel: "05", target: "S1:", map: { left: 53.83, top: 36.56, w: 3.2, h: 3.2 } },
-      { id: "s5", label: "Panel 6 (Lower Panel)", labelEs: "Panel 6 (panel inferior)", kind: "servo", servoIndex: 5, mdPanel: "06", target: "S1:", map: { left: 49.65, top: 29.77, w: 3.2, h: 3.2 } },
-      // Upper: diagram number ≠ Marcduino; mdPanel is the real command index.
-      { id: "s8", label: "Panel 10 (Upper Panel)", labelEs: "Panel 10 (panel superior)", kind: "servo", servoIndex: 8, mdPanel: "07", target: "S1:", map: { left: 61.77, top: 23.09, w: 3.2, h: 3.2 } },
-      { id: "s9", label: "Panel 9 (Upper Panel)", labelEs: "Panel 9 (panel superior)", kind: "servo", servoIndex: 9, mdPanel: "08", target: "S1:", map: { left: 65.95, top: 30.22, w: 3.2, h: 3.2 } },
-      { id: "s10", label: "Panel 8 (Upper Panel)", labelEs: "Panel 8 (panel superior)", kind: "servo", servoIndex: 10, mdPanel: "09", target: "S1:", map: { left: 77.37, top: 30.33, w: 3.2, h: 3.2 } },
-      { id: "s11", label: "Panel 7 (Upper Panel)", labelEs: "Panel 7 (panel superior)", kind: "servo", servoIndex: 11, mdPanel: "10", target: "S1:", map: { left: 82.24, top: 24.45, w: 3.2, h: 3.2 } },
-      { id: "s12", label: "Circular Top Panel", labelEs: "Panel circular superior", kind: "servo", servoIndex: 12, mdPanel: "11", target: "S1:" },
-      // Body (S3:) — mdPanel for :MV/:OP/:CL/#SO/#SC (body servo 1→01 … 9→09).
-      { id: "b1", label: "Body 1 · DPL - DataPanel Door", labelEs: "Body 1 · DPL - Puerta datapanel", kind: "servo", servoIndex: 1, mdPanel: "01", target: "S3:", map: { left: 40.32, top: 61.46, w: 3.2, h: 3.2 } },
-      { id: "b2", label: "Body 2 · UtlArmU - Upper Utility Arm", labelEs: "Body 2 · UtlArmU - Brazo útil superior", kind: "servo", servoIndex: 2, mdPanel: "02", target: "S3:", map: { left: 32.24, top: 46.18, w: 3.2, h: 3.2 } },
-      { id: "b3", label: "Body 3 · UtlArmL - Lower Utility Arm", labelEs: "Body 3 · UtlArmL - Brazo útil inferior", kind: "servo", servoIndex: 3, mdPanel: "03", target: "S3:", map: { left: 27.93, top: 51.04, w: 3.2, h: 3.2 } },
-      { id: "b4", label: "Body 4 · LBdyDr - Left BreadPan Door", labelEs: "Body 4 · LBdyDr - Puerta izquierda", kind: "servo", servoIndex: 4, mdPanel: "04", target: "S3:", map: { left: 15.53, top: 58.74, w: 3.2, h: 3.2 } },
-      { id: "b5", label: "Body 5 · LArm - Left Arm Raise/Lower", labelEs: "Body 5 · LArm - Brazo izq. subir/bajar", kind: "servo", servoIndex: 5, mdPanel: "05", target: "S3:", map: { left: 15.81, top: 53.87, w: 3.2, h: 3.2 } },
-      { id: "b6", label: "Body 6 · LArmTool - Left Arm Tool", labelEs: "Body 6 · LArmTool - Herramienta brazo izq.", kind: "servo", servoIndex: 6, mdPanel: "06", target: "S3:", map: { left: 15.95, top: 49.01, w: 3.2, h: 3.2 } },
-      { id: "b7", label: "Body 7 · ToolRBdyDr - Right BreadPan Door", labelEs: "Body 7 · ToolRBdyDr - Puerta derecha", kind: "servo", servoIndex: 7, mdPanel: "07", target: "S3:", map: { left: 46.45, top: 59.76, w: 3.2, h: 3.2 } },
-      { id: "b8", label: "Body 8 · RArm - Right Arm Raise/Lower", labelEs: "Body 8 · RArm - Brazo dcho. subir/bajar", kind: "servo", servoIndex: 8, mdPanel: "08", target: "S3:", map: { left: 46.59, top: 55.12, w: 3.2, h: 3.2 } },
-      { id: "b9", label: "Body 9 · RArmTool - Right Arm Tool", labelEs: "Body 9 · RArmTool - Herramienta brazo dcho.", kind: "servo", servoIndex: 9, mdPanel: "09", target: "S3:", map: { left: 47.15, top: 48.89, w: 3.2, h: 3.2 } },
-      { id: "holo_f", label: "Front Holo", labelEs: "Holo frontal", kind: "holo", holoId: "01", target: "S1:", maps: [
-        { left: 82.1, top: 43.7, w: 3.2, h: 3.2 },
-        { left: 81.4, top: 37.3, w: 3.2, h: 3.2 },
-      ] },
-      { id: "holo_r", label: "Rear Holo", labelEs: "Holo trasero", kind: "holo", holoId: "03", target: "S1:", maps: [
-        { left: 71.3, top: 7.0, w: 3.2, h: 3.2 },
-        { left: 65.53, top: 4.19, w: 3.2, h: 3.2 },
-      ] },
-      { id: "holo_t", label: "Top Holo", labelEs: "Holo superior", kind: "holo", holoId: "02", target: "S1:", maps: [
-        { left: 81.96, top: 14.60, w: 3.2, h: 3.2 },
-        { left: 75.14, top: 14.60, w: 3.2, h: 3.2 },
-      ] },
-    ];
+    /** localStorage, or a stand-in in memory when the browser gives no storage (blocked site data). */
+    const DROID_STORE = (function () {
+      try {
+        const s = window.localStorage;
+        s.getItem("shadowmd_probe");
+        return s;
+      } catch (e) {
+        const mem = {};
+        return {
+          getItem: (k) => (Object.prototype.hasOwnProperty.call(mem, k) ? mem[k] : null),
+          setItem: (k, v) => { mem[k] = String(v); },
+          removeItem: (k) => { delete mem[k]; },
+        };
+      }
+    })();
+    /** The droid configuration in use (markers); R2_BLUEPRINT_ZONES is computed from it. */
+    // Anything already set up in this browser (parts, PWM ranges, 3D positions)? Then the
+    // first-run guide does not open by itself.
+    const HAD_SAVED_SETUP = ["shadowmd_droid_config_v1", "shadowmd_pwm_ranges_json", "shadowmd_r2_3d_markers"].some((k) => {
+      try {
+        return DROID_STORE.getItem(k) != null;
+      } catch (_) {
+        return false;
+      }
+    });
+    let droidConfig = DroidConfig.loadConfig(DROID_STORE) || DroidConfig.exampleConfig();
+    let R2_BLUEPRINT_ZONES = DroidConfig.toZones(droidConfig);
 
     (function () {
       const LANG_KEY = "shadowmd-lite-ui-lang";
@@ -576,7 +959,7 @@
         window.SHADOWMD_LITE_I18N.es
           ? window.SHADOWMD_LITE_I18N
           : { en: {}, es: {} };
-      let uiLang = localStorage.getItem(LANG_KEY) === "es" ? "es" : "en";
+      let uiLang = DROID_STORE.getItem(LANG_KEY) === "es" ? "es" : "en";
 
       const $ = (id) => document.getElementById(id);
       const logEl = $("log");
@@ -604,6 +987,9 @@
       let selectedZoneIndex = 0;
       let autoSendTimer = null;
       let serialConnected = false;
+      let pipeDone = null; // console writer -> port.writable
+      let readLoopDone = null; // the console's read loop
+      let flashBusy = false; // the flasher owns the port
 
       function applyUiLanguage() {
         document.documentElement.lang = uiLang === "es" ? "es" : "en";
@@ -674,13 +1060,1186 @@
       }
 
       function refreshStatusText() {
-        if (!serialConnected) {
+        if (flashBusy) {
+          statusEl.textContent = L("statusFlashing");
+        } else if (!serialConnected) {
           statusEl.textContent = L("statusDisconnected");
         } else {
           const baud = parseInt($("baud").value, 10) || 115200;
           statusEl.textContent = L("statusConnected", { baud });
         }
       }
+
+      // ------------------------------------------------------------ droid configuration
+      // Every change goes through commitConfig: validate, save, recompute the zones, refill
+      // the zone selector and rebuild the 3D markers. A configuration with errors is refused.
+
+      function cloneConfig(cfg) {
+        return JSON.parse(JSON.stringify({ version: cfg.version, markers: cfg.markers }));
+      }
+
+      function findMarker(id) {
+        return droidConfig.markers.find((m) => m.id === id) || null;
+      }
+
+      /** After the markers change: zones, selector, hotspots, 3D view; keep (or move to) selectId. */
+      function refreshZones(selectId) {
+        const prev = getCurrentZone();
+        R2_BLUEPRINT_ZONES = DroidConfig.toZones(droidConfig);
+        const keepId = selectId !== undefined ? selectId : prev && prev.id;
+        let idx = R2_BLUEPRINT_ZONES.findIndex((z) => z.id === keepId);
+        // The PWM fields belong to the zone that was selected: keep them with it when it
+        // still exists, and never copy them onto another zone
+        if (prev && idx >= 0 && prev.id !== keepId && R2_BLUEPRINT_ZONES.some((z) => z.id === prev.id)) {
+          persistPwmRangeForZoneFromInputs(prev);
+        }
+        if (idx < 0) idx = Math.min(Math.max(selectedZoneIndex, 0), R2_BLUEPRINT_ZONES.length - 1);
+        selectedZoneIndex = idx;
+        fillZoneSelect();
+        renderHotspots();
+        if (window.R2View3D) window.R2View3D.rebuild();
+        selectZone(idx);
+      }
+
+      function commitConfig(cfg, selectId) {
+        const v = DroidConfig.validateConfig(cfg);
+        if (!v.ok) return v;
+        droidConfig = cloneConfig(cfg);
+        DroidConfig.saveConfig(DROID_STORE, droidConfig);
+        refreshZones(selectId);
+        return v;
+      }
+
+      function firstFreeChannel(cfg, board) {
+        const used = new Set(cfg.markers.filter((m) => m.kind === "servo" && m.board === board).map((m) => m.channel));
+        for (let n = 1; n <= 99; n++) {
+          const ch = String(n).padStart(2, "0");
+          if (!used.has(ch)) return ch;
+        }
+        return null;
+      }
+
+      function firstFreeHoloId(cfg) {
+        const used = new Set(cfg.markers.filter((m) => m.kind === "holo").map((m) => m.holoId));
+        for (let n = 1; n <= 99; n++) {
+          const ch = String(n).padStart(2, "0");
+          if (!used.has(ch)) return ch;
+        }
+        return null;
+      }
+
+      /** Merge patch into marker id (a key set to undefined is removed). Refused if invalid. */
+      function updateMarker(id, patch) {
+        const i = droidConfig.markers.findIndex((m) => m.id === id);
+        if (i < 0) return { ok: false, errors: [{ id, code: "not-found" }] };
+        const m = Object.assign({}, droidConfig.markers[i], patch, { id });
+        Object.keys(patch || {}).forEach((k) => { if (patch[k] === undefined) delete m[k]; });
+        if (m.kind === "holo") {
+          delete m.channel;
+          if (!Array.isArray(m.axes)) m.axes = ["h", "v"];
+        } else {
+          delete m.holoId;
+          delete m.axes;
+        }
+        const cfg = cloneConfig(droidConfig);
+        cfg.markers[i] = m;
+        return commitConfig(cfg, id);
+      }
+
+      /**
+       * A new servo (body, first free channel) or holo (axes H and V); returns its id, or null.
+       * `init` (optional) overrides the defaults, e.g. { board, channel, name, nameEs, pos3d, part }.
+       */
+      function addMarker(kind, init) {
+        const cfg = cloneConfig(droidConfig);
+        const id = DroidConfig.newMarkerId(cfg);
+        let m;
+        if (kind === "holo") {
+          const holoId = firstFreeHoloId(cfg);
+          if (!holoId) return null;
+          m = { id, name: STR.en.newHolo, nameEs: STR.es.newHolo, kind: "holo", board: "S1:", holoId, axes: ["h", "v"] };
+        } else {
+          const channel = firstFreeChannel(cfg, "S3:");
+          if (!channel) return null;
+          m = { id, name: STR.en.newPart, nameEs: STR.es.newPart, kind: "servo", board: "S3:", channel };
+        }
+        if (init) Object.assign(m, init, { id, kind: m.kind });
+        cfg.markers.push(m);
+        // Ids are reused (m1, m2…): a new part must not inherit a range left by an old one
+        const map = readPwmRangesMap();
+        if (Object.prototype.hasOwnProperty.call(map, id)) {
+          delete map[id];
+          writePwmRangesMap(map);
+        }
+        return commitConfig(cfg, id).ok ? id : null;
+      }
+
+      /** Delete a marker, and its PWM range with it. */
+      function removeMarker(id) {
+        if (!findMarker(id)) return { ok: false, errors: [{ id, code: "not-found" }] };
+        const cfg = cloneConfig(droidConfig);
+        cfg.markers = cfg.markers.filter((m) => m.id !== id);
+        const v = commitConfig(cfg);
+        if (v.ok) {
+          const map = readPwmRangesMap();
+          if (Object.prototype.hasOwnProperty.call(map, id)) {
+            delete map[id];
+            writePwmRangesMap(map);
+          }
+        }
+        return v;
+      }
+
+      /** Replace the whole configuration; refused (and returned) when validateConfig finds errors. */
+      function setConfig(cfg) {
+        return commitConfig(cloneConfig(cfg));
+      }
+
+      // What the 3D view (r2view3d.js) needs from the console
+      window.R2Console = {
+        get zones() { return R2_BLUEPRINT_ZONES; },
+        get config() { return droidConfig; },
+        selectZone: (i) => selectZone(i),
+        selected: () => selectedZoneIndex,
+        label: (z) => zoneDisplayLabel(z),
+        lang: () => uiLang,
+        updateMarker,
+        addMarker,
+        removeMarker,
+        setConfig,
+        ask: (text, buttons) => askInPage(text, buttons),
+      };
+
+      // ------------------------------------------------------------ part editor (pencil)
+
+      function markerLabel(id) {
+        const z = R2_BLUEPRINT_ZONES.find((zz) => zz.id === id);
+        return z ? zoneDisplayLabel(z) + " (" + id + ")" : id;
+      }
+
+      function errorText(e, board, channel) {
+        if (e.code === "duplicate-channel") return L("edErrDuplicate", { channel: board + channel, other: markerLabel(e.other) });
+        if (e.code === "bad-channel") return L("edErrChannel");
+        if (e.code === "missing-name") return L("edErrName");
+        if (e.code === "bad-kind") return L("edErrKind");
+        return e.code;
+      }
+
+      function showEditorError(text) {
+        const el = $("edError");
+        el.textContent = text || "";
+        el.hidden = !text;
+        $("edChannel").classList.toggle("ed-bad", !!text);
+      }
+
+      function showEditorMsg(text, bad) {
+        const el = $("edMsg");
+        el.textContent = text || "";
+        el.hidden = !text;
+        el.classList.toggle("bad", !!bad);
+      }
+
+      /** In-page question (never window.confirm): text plus buttons [{label, cls, fn}]. */
+      function askInPage(text, buttons) {
+        $("markerEditor").hidden = false;       // the question lives in the editor panel
+        $("edPromptText").textContent = text;
+        const box = $("edPromptBtns");
+        box.innerHTML = "";
+        buttons.forEach((b) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = b.cls || "btn-ghost";
+          btn.textContent = b.label;
+          btn.addEventListener("click", () => {
+            $("edPrompt").hidden = true;
+            if (b.fn) b.fn();
+          });
+          box.appendChild(btn);
+        });
+        $("edPrompt").hidden = false;
+      }
+
+      /** Fill the editor from the selected marker (drops whatever invalid draft was there). */
+      function renderEditor() {
+        const z = getCurrentZone();
+        const m = z ? findMarker(z.id) : null;
+        const fields = ["edName", "edNameEs", "edKind", "edBoard", "edChannel", "edAxisH", "edAxisV", "edDelete"];
+        fields.forEach((id) => { $(id).disabled = !m; });
+        $("edHint").textContent = m ? L("edHint") : L("edNoParts");
+        $("edMove").disabled = !m;
+        setPlacing2d(placing2d);
+        showEditorError("");
+        if (!m) {
+          ["edName", "edNameEs", "edChannel"].forEach((id) => { $(id).value = ""; });
+          $("edAxesBox").classList.add("is-hidden");
+          return;
+        }
+        $("edName").value = m.name || "";
+        $("edNameEs").value = m.nameEs || "";
+        $("edKind").value = m.kind;
+        $("edBoard").value = m.board;
+        const holo = m.kind === "holo";
+        $("edChannel").value = (holo ? m.holoId : m.channel) || "";
+        $("edChannelLabel").textContent = L(holo ? "edHoloId" : "edChannel");
+        $("edAxesBox").classList.toggle("is-hidden", !holo);
+        const axes = Array.isArray(m.axes) ? m.axes : [];
+        $("edAxisH").checked = axes.includes("h");
+        $("edAxisV").checked = axes.includes("v");
+      }
+
+      function twoDigits(v) {
+        const t = String(v || "").trim();
+        return /^\d$/.test(t) ? "0" + t : t;
+      }
+
+      /** Save what the editor fields say; on a conflict show it in red and keep the draft. */
+      function applyEditorFields() {
+        const z = getCurrentZone();
+        if (!z) return;
+        const kind = $("edKind").value;
+        const board = $("edBoard").value;
+        const ch = twoDigits($("edChannel").value);
+        $("edChannel").value = ch;
+        const nameEs = $("edNameEs").value.trim();
+        const patch = { name: $("edName").value.trim(), nameEs: nameEs || undefined, kind, board };
+        if (kind === "holo") {
+          patch.holoId = ch;
+          patch.axes = ["h", "v"].filter((a) => $(a === "h" ? "edAxisH" : "edAxisV").checked);
+        } else {
+          patch.channel = ch;
+        }
+        const v = updateMarker(z.id, patch);
+        if (!v.ok) {
+          const mine = v.errors.filter((e) => e.id === z.id);
+          showEditorError(L("edNotSaved") + (mine.length ? mine : v.errors).map((e) => errorText(e, board, ch)).join(" "));
+        }
+      }
+
+      ["edName", "edNameEs", "edBoard", "edChannel", "edAxisH", "edAxisV"].forEach((id) => {
+        $(id).addEventListener("change", applyEditorFields);
+      });
+      // A new type starts on a free channel / holo number; a new holo proposes both axes
+      $("edKind").addEventListener("change", () => {
+        const holo = $("edKind").value === "holo";
+        const others = { markers: droidConfig.markers.filter((m) => !getCurrentZone() || m.id !== getCurrentZone().id) };
+        $("edChannel").value = (holo ? firstFreeHoloId(others) : firstFreeChannel(others, $("edBoard").value)) || "";
+        if (holo) {
+          $("edBoard").value = "S1:";          // the holos hang off the dome board
+          $("edAxisH").checked = true;
+          $("edAxisV").checked = true;
+        }
+        applyEditorFields();
+      });
+
+      $("edAdd").addEventListener("click", () => {
+        $("edPrompt").hidden = true;
+        showEditorMsg("");
+        const id = addMarker("servo");
+        if (!id) {
+          showEditorMsg(L("edNoFreeChannel"), true);
+          return;
+        }
+        // Straight to "click on R2 to place it"
+        startPlacing();
+      });
+
+      // ---- placing a marker: on the 3D R2, or on the 2D blueprint when there is no WebGL
+      let placing2d = false;
+
+      function has3d() {
+        return !!(window.R2View3D && window.R2View3D.is3d && window.R2View3D.is3d());
+      }
+
+      function setPlacing2d(on) {
+        placing2d = !!on && !!getCurrentZone();
+        $("edMove").classList.toggle("btn-ok", placing2d);
+        $("edMove").textContent = placing2d ? L("edPlacing2d") : L("edMove");
+        $("blueprintStage").style.cursor = placing2d ? "crosshair" : "";
+      }
+
+      function startPlacing() {
+        if (!getCurrentZone()) return;
+        if (has3d()) window.R2View3D.place();
+        else setPlacing2d(true);
+      }
+
+      /** Blueprint click while placing: the marker's 2D spot, in % like the existing ones. */
+      function placeOn2d(xPct, yPct) {
+        const z = getCurrentZone();
+        setPlacing2d(false);
+        if (!z) return;
+        updateMarker(z.id, { map2d: [spot2d(xPct, yPct)] });
+      }
+
+      /** A marker's 2D spot around a blueprint click, in % like the existing ones. */
+      function spot2d(xPct, yPct) {
+        const r2 = (v) => Math.round(v * 100) / 100;
+        return { left: r2(xPct - 1.6), top: r2(yPct - 1.6), w: 3.2, h: 3.2 };
+      }
+
+      $("edMove").addEventListener("click", () => {
+        if (placing2d) setPlacing2d(false);
+        else startPlacing();
+      });
+
+      $("edDelete").addEventListener("click", () => {
+        const z = getCurrentZone();
+        if (!z) return;
+        showEditorMsg("");
+        askInPage(L("edAskDelete", { name: zoneDisplayLabel(z) }), [
+          { label: L("edDelete"), cls: "btn-warn", fn: () => removeMarker(z.id) },
+          { label: L("edCancel") },
+        ]);
+      });
+
+      $("edExport").addEventListener("click", () => {
+        const ranges = readPwmRangesMap();
+        const text = DroidConfig.serializeConfig(droidConfig, Object.keys(ranges).length ? ranges : undefined);
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+        a.download = "shadowmd-droid-config.json";
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      });
+
+      $("edImport").addEventListener("click", () => {
+        $("edPrompt").hidden = true;
+        showEditorMsg("");
+        $("edImportFile").value = "";
+        $("edImportFile").click();
+      });
+
+      const IMPORT_ERRORS = { "bad-json": "impErrBadJson", "bad-format": "impErrBadFormat", "bad-version": "impErrBadVersion", invalid: "impErrInvalid" };
+
+      /** parseConfig plus what the console itself needs: unique ids, known boards. */
+      function readImport(text) {
+        const parsed = DroidConfig.parseConfig(text);
+        const ids = new Set();
+        parsed.config.markers.forEach((m) => {
+          if (typeof m.id !== "string" || !m.id || ids.has(m.id) || (m.board !== "S1:" && m.board !== "S3:")) {
+            throw new Error("bad marker");
+          }
+          ids.add(m.id);
+        });
+        const ranges = {};
+        if (parsed.pwmRanges && !Array.isArray(parsed.pwmRanges)) {
+          Object.keys(parsed.pwmRanges).forEach((k) => {
+            const r = parsed.pwmRanges[k];
+            if (r && typeof r === "object" && Number.isFinite(Number(r.min)) && Number.isFinite(Number(r.max))) {
+              ranges[k] = { min: Number(r.min), max: Number(r.max) };
+            }
+          });
+        }
+        return { config: parsed.config, pwmRanges: Object.keys(ranges).length ? ranges : null };
+      }
+
+      function applyImport(data, withRanges) {
+        const v = setConfig(data.config);
+        if (!v.ok) {
+          showEditorMsg(L("impErrInvalid"), true);
+          return;
+        }
+        if (withRanges && data.pwmRanges) {
+          writePwmRangesMap(Object.assign(readPwmRangesMap(), data.pwmRanges));
+          applyStoredPwmRangeForZone(getCurrentZone());
+        }
+        showEditorMsg(L("impDone", { n: data.config.markers.length }));
+      }
+
+      $("edImportFile").addEventListener("change", () => {
+        const f = $("edImportFile").files && $("edImportFile").files[0];
+        if (!f) return;
+        const fr = new FileReader();
+        fr.onerror = () => showEditorMsg(L("impErrGeneric"), true);
+        fr.onload = () => {
+          let data;
+          try {
+            data = readImport(String(fr.result));
+          } catch (e) {
+            // Any error at all (even a TypeError from a broken marker): say so, change nothing
+            showEditorMsg(L((e && IMPORT_ERRORS[e.code]) || "impErrGeneric"), true);
+            return;
+          }
+          if (data.pwmRanges) {
+            askInPage(L("impAskPwm", { n: Object.keys(data.pwmRanges).length }), [
+              { label: L("impWithPwm"), cls: "btn-ok", fn: () => applyImport(data, true) },
+              { label: L("impPartsOnly"), fn: () => applyImport(data, false) },
+              { label: L("edCancel") },
+            ]);
+          } else {
+            applyImport(data, false);
+          }
+        };
+        fr.readAsText(f);
+      });
+
+      // Load example / start empty change only the markers, never the PWM ranges
+      $("edExample").addEventListener("click", () => {
+        showEditorMsg("");
+        askInPage(L("edAskExample"), [
+          { label: L("edExample"), cls: "btn-warn", fn: () => setConfig(DroidConfig.exampleConfig()) },
+          { label: L("edCancel") },
+        ]);
+      });
+      $("edEmpty").addEventListener("click", () => {
+        showEditorMsg("");
+        askInPage(L("edAskEmpty"), [
+          { label: L("edEmpty"), cls: "btn-warn", fn: () => setConfig(DroidConfig.emptyConfig()) },
+          { label: L("edCancel") },
+        ]);
+      });
+
+      function showEditor(on) {
+        $("markerEditor").hidden = !on;
+        $("edToggle").classList.toggle("btn-ok", on);
+        if (on) renderEditor();
+        else setPlacing2d(false);
+      }
+      // The pencil of the 3D view opens and closes the editor; "Edit parts" works without 3D too
+      window.addEventListener("r2-edit", (e) => showEditor(!!e.detail));
+      $("edToggle").addEventListener("click", () => showEditor($("markerEditor").hidden));
+
+      // ------------------------------------------------------------ flash the Mega
+      // Pick a .hex -> summary -> Flash -> phases + bar -> result. The flasher takes the port
+      // from the console (or asks for one), opens it at 115200 for the bootloader, closes it
+      // and gives it back to the console at the baud rate it had.
+
+      const FLASH_PHASES = ["reset", "sync", "write", "verify"];
+      const flash = {
+        file: null, // File chosen
+        hex: null, // { bytes, size } parsed from it
+        phase: null, // phase being run, or where it stopped
+        failedPhase: null,
+        progressKey: null, // [key, vars] under the bar
+        msg: null, // { cls: "ok" | "bad", lines: [[key, vars], ...] }
+        transport: null,
+        cancelled: false,
+      };
+
+      function kb(n) {
+        return (n / 1024).toFixed(1);
+      }
+
+      function setFlashMsg(cls, lines) {
+        flash.msg = cls ? { cls, lines } : null;
+        renderFlash();
+      }
+
+      /** Redraws the whole section from `flash` (also on a language change). */
+      function renderFlash() {
+        const hasSerial = "serial" in navigator;
+        const sum = $("flashSummary");
+        sum.hidden = !flash.hex;
+        if (flash.hex) {
+          $("flashSummaryText").textContent = L("flashSummary", {
+            name: flash.file ? flash.file.name : "",
+            kb: kb(flash.hex.size),
+            max: kb(IntelHex.MAX_SIZE),
+          });
+        }
+        $("flashBtns").hidden = !flash.hex;
+        $("flashGo").disabled = !flash.hex || flashBusy || !hasSerial;
+        // Cancel: before anything is written only (choosing a file, reset, waiting for the bootloader)
+        const cancelOk = !flashBusy || flash.phase === null || flash.phase === "reset" || flash.phase === "sync" || flash.phase === "port";
+        $("flashCancel").disabled = !cancelOk;
+        $("flashPick").disabled = flashBusy;
+        $("flashClose").disabled = flashBusy;
+
+        const prog = $("flashProgress");
+        prog.hidden = !flash.phase;
+        const idx = FLASH_PHASES.indexOf(flash.phase);
+        prog.querySelectorAll(".flash-phases li").forEach((li) => {
+          const i = FLASH_PHASES.indexOf(li.getAttribute("data-phase"));
+          li.classList.toggle("done", flash.phase === "done" || (idx >= 0 && i < idx));
+          li.classList.toggle("active", flashBusy && i === idx);
+          li.classList.toggle("failed", !flashBusy && li.getAttribute("data-phase") === flash.failedPhase);
+        });
+        $("flashPhaseText").textContent = flash.progressKey ? L(flash.progressKey[0], flash.progressKey[1]) : "";
+
+        const box = $("flashMsg");
+        let lines = flash.msg ? flash.msg.lines : null;
+        if (!lines && !hasSerial) lines = [["flashNoSerial"]];
+        box.hidden = !lines;
+        box.className = "flash-msg" + (flash.msg ? " " + flash.msg.cls : "");
+        box.textContent = "";
+        (lines || []).forEach((ln) => {
+          const p = document.createElement("p");
+          p.textContent = L(ln[0], ln[1]);
+          box.appendChild(p);
+        });
+      }
+
+      /** Reads and checks the .hex; throws the parser's error (with .code). */
+      async function readHexFile(file) {
+        let text;
+        try {
+          text = await file.text();
+        } catch (e) {
+          const err = new Error(e.message || String(e));
+          err.code = "read";
+          throw err;
+        }
+        return IntelHex.parseIntelHex(text);
+      }
+
+      function hexErrorLines(e) {
+        const code = e && e.code;
+        const known = ["bad-line", "bad-checksum", "too-big", "empty", "truncated", "read"];
+        const key = known.indexOf(code) >= 0 ? "hexErr_" + code : "hexErr_generic";
+        return [[key, { msg: (e && e.message) || String(e) }], ["hexRecover"]];
+      }
+
+      async function chooseHexFile(file) {
+        flash.file = null;
+        flash.hex = null;
+        flash.phase = null;
+        flash.failedPhase = null;
+        flash.progressKey = null;
+        setFlashMsg(null);
+        if (!file) return;
+        try {
+          flash.hex = await readHexFile(file);
+          flash.file = file;
+          renderFlash();
+        } catch (e) {
+          setFlashMsg("bad", hexErrorLines(e));
+        }
+      }
+
+      function flashErrorLines(e, wroteSomething) {
+        const code = (e && e.code) || "";
+        const vars = { msg: (e && e.message) || String(e) };
+        if (code === "cancelled") return [["flashCancelled"], ["flashNothingWritten"]];
+        if (code === "open") return [["flashErr_open", vars], ["flashNothingWritten"]];
+        const lines = [];
+        if (code === "verify-failed") {
+          vars.addr = (e.address >>> 0).toString(16).toUpperCase();
+          lines.push(["flashErr_verify-failed", vars]);
+        } else if (code === "wrong-chip") {
+          vars.sig = Array.from(e.signature || [], (b) => b.toString(16).toUpperCase().padStart(2, "0")).join(" ");
+          lines.push(["flashErr_wrong-chip", vars]);
+        } else if (["timeout", "no-sync", "disconnected", "bad-checksum", "bad-status", "protocol", "too-big", "empty"].indexOf(code) >= 0) {
+          lines.push(["flashErr_" + code, vars]);
+        } else {
+          lines.push(["flashErr_generic", vars]);
+        }
+        lines.push([wroteSomething ? "flashIncomplete" : "flashNothingWritten"]);
+        lines.push(["flashRecover"]);
+        return lines;
+      }
+
+      function onFlashProgress(phase, done, total) {
+        if (phase === "done") {
+          flash.phase = "done";
+          $("flashBar").value = 1000;
+          renderFlash();
+          return;
+        }
+        flash.phase = phase;
+        let v = 0;
+        if (phase === "reset") flash.progressKey = ["flashStatusReset"];
+        else if (phase === "sync") flash.progressKey = ["flashStatusSync", { i: done, n: total }];
+        else if (phase === "write") {
+          flash.progressKey = ["flashStatusWrite", { done: kb(done), total: kb(total) }];
+          v = total ? (done / total) * 500 : 0;
+        } else if (phase === "verify") {
+          flash.progressKey = ["flashStatusVerify", { done: kb(done), total: kb(total) }];
+          v = 500 + (total ? (done / total) * 500 : 0);
+        }
+        $("flashBar").value = Math.round(v);
+        renderFlash();
+      }
+
+      function setFlashBusy(on) {
+        flashBusy = on;
+        setConnected(serialConnected);
+        refreshStatusText();
+        renderFlash();
+      }
+
+      /**
+       * Flashes `file` (an Intel HEX from "Export compiled binary") onto the Mega.
+       * Uses the console's port if it is connected (and reconnects it afterwards at the same
+       * baud rate); otherwise asks for a port.
+       */
+      async function flashHexFile(file) {
+        if (flashBusy || !file) return;
+        let p = port;
+        const wasConnected = serialConnected && !!port;
+        const baud = parseInt($("baud").value, 10) || 115200;
+        // Ask for the port first, while the click still counts as a user gesture
+        if (!p) {
+          try {
+            p = await navigator.serial.requestPort();
+          } catch (e) {
+            if (e.name !== "NotFoundError") setFlashMsg("bad", [["flashErr_open", { msg: e.message || String(e) }], ["flashNothingWritten"]]);
+            return;
+          }
+        }
+        let hex = flash.file === file ? flash.hex : null;
+        if (!hex) {
+          try {
+            hex = await readHexFile(file);
+          } catch (e) {
+            setFlashMsg("bad", hexErrorLines(e));
+            return;
+          }
+        }
+
+        flash.cancelled = false;
+        flash.failedPhase = null;
+        flash.phase = "port";
+        flash.progressKey = ["flashStatusPort"];
+        $("flashBar").value = 0;
+        flash.msg = null;
+        setFlashBusy(true);
+        let wrote = false;
+        try {
+          if (wasConnected) await releaseConsole();
+          if (flash.cancelled) throw Object.assign(new Error("cancelled"), { code: "cancelled" });
+          try {
+            await p.open({ baudRate: 115200 });
+          } catch (e) {
+            throw Object.assign(new Error(e.message || String(e)), { code: "open" });
+          }
+          flash.transport = WebSerialTransport.createWebSerialTransport(p, (line) => console.log("[flash] " + line));
+          if (flash.cancelled) flash.transport.abort();
+          await Stk500v2.flashMega(flash.transport, hex.bytes, (phase, done, total) => {
+            if (phase === "write") wrote = true;
+            onFlashProgress(phase, done, total);
+          });
+          flash.progressKey = null;
+          flash.msg = { cls: "ok", lines: [["flashDone", { kb: kb(hex.size) }]] };
+          setTimeout(() => window.dispatchEvent(new Event("r2-flash-done")), 0);
+        } catch (e) {
+          flash.failedPhase = FLASH_PHASES.indexOf(flash.phase) >= 0 ? flash.phase : null;
+          flash.progressKey = null;
+          flash.msg = { cls: "bad", lines: flashErrorLines(e, wrote) };
+        } finally {
+          if (flash.transport) {
+            try {
+              await flash.transport.close();
+            } catch (_) {}
+            flash.transport = null;
+          }
+          try {
+            await p.close();
+          } catch (_) {}
+          flashBusy = false;
+          if (wasConnected) {
+            try {
+              await openConsoleOn(p, baud);
+            } catch (e) {
+              port = null;
+              writer = null;
+              flash.msg.lines.push(["flashReconnectFail", { msg: e.message || String(e) }]);
+            }
+          }
+          setFlashBusy(false);
+          if (!serialConnected) setConnected(false);
+        }
+      }
+      window.flashHexFile = flashHexFile;
+
+      $("flashPick").addEventListener("click", () => {
+        $("flashFile").value = "";
+        $("flashFile").click();
+      });
+      $("flashFile").addEventListener("change", () => {
+        const f = $("flashFile").files && $("flashFile").files[0];
+        chooseHexFile(f || null);
+      });
+      $("flashGo").addEventListener("click", () => flashHexFile(flash.file));
+
+      // ------------------------------------------------------------ windows (dialogs)
+      // Flash and Routing open as modal windows from the header. The parts editor stays next to
+      // the R2 (you pick and place parts by clicking the model), the header button just opens it.
+      function openDialog(id) {
+        const d = $(id);
+        if (!d.open) d.showModal();
+      }
+      document.querySelectorAll("dialog.modal").forEach((d) => {
+        // Esc must not close the flash window while the Mega is being flashed
+        d.addEventListener("cancel", (e) => {
+          if (d.id === "flashDialog" && flashBusy) e.preventDefault();
+        });
+        d.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", () => d.close()));
+        // click on the dark backdrop closes too (not while flashing)
+        d.addEventListener("click", (e) => {
+          if (e.target === d && !(d.id === "flashDialog" && flashBusy)) d.close();
+        });
+      });
+      $("toolFlash").addEventListener("click", () => {
+        renderFlash();
+        openDialog("flashDialog");
+      });
+      $("toolRouting").addEventListener("click", () => openDialog("routingDialog"));
+      $("toolParts").addEventListener("click", () => {
+        showEditor(true);
+        $("markerEditor").scrollIntoView({ behavior: "smooth", block: "nearest" });
+      });
+
+      // ------------------------------------------------------------ guided channel walk
+      // Channel by channel: open, then close 1.5 s later; the user clicks on R2 where the part
+      // that moved is (moves its marker, or creates "Dome 07" / "Body 07"), or says "nothing here".
+      // Only panel servos (:OP/:CL); holos are added by hand in the part editor.
+      const walk = { on: false, board: "S1:", n: 0, to: 13, placedId: null, count: 0, timer: null, pick2d: false };
+
+      function walkArmPick() {
+        if (has3d()) window.R2View3D.pickPoint(walkSpot);
+        else {
+          walk.pick2d = true;
+          $("blueprintStage").style.cursor = "crosshair";
+        }
+      }
+
+      function walkDisarm() {
+        if (window.R2View3D && window.R2View3D.pickPoint) window.R2View3D.pickPoint(null);
+        walk.pick2d = false;
+        $("blueprintStage").style.cursor = "";
+        clearTimeout(walk.timer);
+      }
+
+      async function walkMove() {
+        clearTimeout(walk.timer);
+        if (!serialConnected) {
+          $("walkLook").textContent = L("walkNeedSerial");
+          return;
+        }
+        const c = ChannelWalk.walkCommands(walk.board, walk.n);
+        try {
+          await sendOneLine(c.open);
+          walk.timer = setTimeout(() => sendOneLine(c.close).catch(() => {}), 1500);
+        } catch (e) {
+          appendLog("! ", L("logSendErr") + (e.message || e));
+        }
+      }
+
+      function walkZoneIndex(id) {
+        return R2_BLUEPRINT_ZONES.findIndex((z) => z.id === id);
+      }
+
+      function walkRender() {
+        const ch = ChannelWalk.channelStr(walk.n);
+        const boardName = L(walk.board === "S3:" ? "walkBody" : "walkDome");
+        $("walkCh").textContent = L("walkChannel", { board: boardName, ch, to: ChannelWalk.channelStr(walk.to) });
+        const m = ChannelWalk.findServo(droidConfig, walk.board, walk.n);
+        $("walkHas").textContent = m ? L("walkHas", { name: uiLang === "es" ? m.nameEs || m.name : m.name }) : L("walkNone");
+        const placed = !!walk.placedId;
+        const look = $("walkLook");
+        look.classList.toggle("placed", placed);
+        look.textContent = placed ? L("walkPlaced") : L("walkLook", { ch });
+        $("walkNameBox").hidden = !placed;
+        $("walkNext").textContent = L(placed ? "walkNext" : "walkNothing");
+      }
+
+      function walkEnter(n) {
+        walkDisarm();
+        if (n > walk.to) return walkEnd();
+        walk.n = n;
+        walk.placedId = null;
+        const m = ChannelWalk.findServo(droidConfig, walk.board, n);
+        if (m) {
+          const i = walkZoneIndex(m.id);
+          if (i >= 0) selectZone(i);
+        }
+        walkRender();
+        walkArmPick();
+        walkMove();
+      }
+
+      /** Click on R2 for this channel: move its marker, or create one; then let the user name it. */
+      function walkSpot(spot) {
+        let m = ChannelWalk.findServo(droidConfig, walk.board, walk.n);
+        let id = m ? m.id : null;
+        if (m) {
+          if (!updateMarker(m.id, spot).ok) id = null;
+        } else {
+          const nm = ChannelWalk.defaultName(walk.board, walk.n);
+          id = addMarker("servo", Object.assign({ board: walk.board, channel: ChannelWalk.channelStr(walk.n) }, nm, spot));
+        }
+        if (id) {
+          if (walk.placedId !== id) walk.count++;
+          walk.placedId = id;
+          const i = walkZoneIndex(id);
+          if (i >= 0) selectZone(i);
+          m = findMarker(id);
+          $("walkName").value = m ? (uiLang === "es" ? m.nameEs || m.name : m.name) : "";
+        }
+        walkRender();
+        walkArmPick(); // another click moves it again
+        if (id) $("walkName").focus();
+      }
+
+      function walkSaveName() {
+        const id = walk.placedId;
+        const m = id && findMarker(id);
+        const v = $("walkName").value.trim();
+        if (!m || !v) return;
+        const dflt = ChannelWalk.defaultName(walk.board, walk.n).name;
+        // a part still named by default gets the name in both languages; otherwise only this language
+        const isDefault = m.name === dflt && (m.nameEs || dflt) === dflt;
+        const patch = isDefault ? { name: v, nameEs: v } : uiLang === "es" ? { nameEs: v } : { name: v };
+        updateMarker(id, patch);
+      }
+
+      function walkEnd() {
+        walkDisarm();
+        walk.on = false;
+        $("walkRun").hidden = true;
+        $("walkSetup").hidden = false;
+        const msg = $("walkSetupMsg");
+        msg.hidden = false;
+        msg.classList.add("placed");
+        msg.textContent = L("walkDone", { n: walk.count });
+        window.dispatchEvent(new Event("r2-walk-end"));
+      }
+
+      function walkClose() {
+        if (walk.on) walkSaveName();
+        walkDisarm();
+        walk.on = false;
+        $("walkDialog").close();
+      }
+
+      /** Starts the walk: board "S1:" (dome) or "S3:" (body), channels from..to (to: 13 by default, up to 99). */
+      window.startChannelWalk = function startChannelWalk(opts) {
+        const o = opts || {};
+        const r = ChannelWalk.normalizeRange(o.from, o.to);
+        walk.on = true;
+        walk.board = o.board === "S3:" ? "S3:" : "S1:";
+        walk.to = r.to;
+        walk.count = 0;
+        $("walkSetup").hidden = true;
+        $("walkRun").hidden = false;
+        if (!$("walkDialog").open) $("walkDialog").show();
+        walkEnter(r.from);
+      };
+
+      $("toolWalk").addEventListener("click", () => {
+        if (walk.on) return;
+        $("walkSetup").hidden = false;
+        $("walkRun").hidden = true;
+        $("walkSetupMsg").hidden = true;
+        $("walkDialog").show();
+      });
+      $("walkStart").addEventListener("click", () => {
+        if (!serialConnected) {
+          const msg = $("walkSetupMsg");
+          msg.hidden = false;
+          msg.classList.remove("placed");
+          msg.textContent = L("walkNeedSerial");
+          return;
+        }
+        window.startChannelWalk({ board: $("walkBoard").value, from: $("walkFrom").value, to: $("walkTo").value });
+      });
+      $("walkRepeat").addEventListener("click", () => walkMove());
+      $("walkNext").addEventListener("click", () => {
+        walkSaveName();
+        walkEnter(walk.n + 1);
+      });
+      $("walkFinish").addEventListener("click", () => {
+        walkSaveName();
+        walkEnd();
+      });
+      $("walkName").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          walkSaveName();
+          walkEnter(walk.n + 1);
+        }
+      });
+      $("walkName").addEventListener("change", () => walkSaveName());
+      $("walkClose").addEventListener("click", () => walkClose());
+      $("walkDialog").addEventListener("cancel", (e) => {
+        e.preventDefault();
+        walkClose();
+      });
+      window.addEventListener("r2-lang", () => {
+        if (walk.on) walkRender();
+      });
+
+      // ------------------------------------------------------------ first-run guided setup
+      // welcome → sketch → (patch → flash →) connect → walk → done. The steps and their order live
+      // in lib/onboarding.js; this is only the cards. It opens by itself the first time (nothing
+      // saved in this browser yet); "Guide" in the header opens it again at the saved step.
+      const CLASSIC_GUIDE_URL = "https://github.com/BeskarCode/SHADOW_MD_EEBEL/blob/pc-forwarding/docs/web-console.md";
+      const ONB_STORE = DROID_STORE;
+      const onb = { state: Onboarding.loadState(ONB_STORE), files: null, pinging: false, walked: {} };
+
+      function onbSave() {
+        Onboarding.saveState(ONB_STORE, onb.state);
+      }
+
+      function onbGo(input) {
+        onb.state = Onboarding.next(onb.state, input);
+        onbSave();
+        onbRender();
+      }
+
+      function downloadText(name, text) {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          URL.revokeObjectURL(a.href);
+          a.remove();
+        }, 1000);
+      }
+
+      /** The sketch in plain words, e.g. "Classic Shadow MD · MarcDuinos at 9600 · no USB forwarding: we'll add it". */
+      function onbSketchSummary(d) {
+        if (!d || d.variant === "unknown") return L("onbVarUnknown");
+        const parts = [L(d.variant === "lite" ? "onbVarLite" : "onbVarClassic")];
+        if (d.marcDuinoBaud) parts.push(L("onbBaud", { baud: d.marcDuinoBaud }));
+        if (d.variant === "classic") parts.push(L(d.forwarding ? "onbFwdYes" : "onbFwdNo"));
+        else parts.push(L(d.forwarding ? "onbFwdYes" : "onbFwdLiteOff"));
+        if (d.ros2d2) parts.push("ROS2D2");
+        if (d.buttons && d.buttons.length) parts.push(L("onbButtons", { n: d.buttons.length }));
+        return parts.join(" · ");
+      }
+
+      function onbRenderPatch() {
+        const box = $("onbPatchFiles");
+        box.innerHTML = "";
+        const msg = $("onbPatchMsg");
+        $("onbPatchBack").hidden = !!onb.files;
+        if (!onb.files) {
+          msg.textContent = L("onbPatchNoFiles");
+          return;
+        }
+        const r = InoPatch.patchClassic(onb.files);
+        if (!r.ok) {
+          msg.textContent = L(r.reason === "already-patched" ? "onbPatchAlready" : "onbPatchFail", { where: r.where || "" });
+          return;
+        }
+        msg.textContent = L("onbPatchOk");
+        // only the tabs that changed, plus PcForwarding.h (patchClassic always lists it)
+        r.files.filter((f) => r.changed.indexOf(f.name) >= 0).forEach((f) => {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.className = "btn-ghost";
+          b.textContent = L("onbDownload", { name: f.name });
+          b.addEventListener("click", () => downloadText(f.name, f.text));
+          box.appendChild(b);
+        });
+      }
+
+      function onbRender() {
+        const s = onb.state;
+        const steps = $("onbSteps");
+        steps.innerHTML = "";
+        const cur = Onboarding.STEPS.indexOf(s.step);
+        Onboarding.STEPS.forEach((st, i) => {
+          const li = document.createElement("li");
+          li.textContent = L("onbStep_" + st);
+          li.classList.toggle("done", i < cur);
+          li.classList.toggle("active", i === cur);
+          steps.appendChild(li);
+        });
+        $("onbTitle").textContent = L("onbT_" + s.step);
+        $("onbText").innerHTML = L("onbX_" + s.step);
+        document.querySelectorAll("#onbDialog .onb-pane").forEach((p) => {
+          p.hidden = p.getAttribute("data-step") !== s.step;
+        });
+        if (s.step === "patch") onbRenderPatch();
+        if (s.step === "sketch") {
+          const sum = $("onbSummary");
+          sum.hidden = !s.detect;
+          if (s.detect) sum.textContent = onbSketchSummary(s.detect);
+        }
+        if (s.step === "walk") {
+          const w = $("onbWalkMsg");
+          const done = Object.keys(onb.walked).map((b) => L(b === "S3:" ? "walkBody" : "walkDome"));
+          w.hidden = !done.length;
+          w.textContent = L("onbWalked", { list: done.join(", ") });
+        }
+      }
+
+      function onbOpen() {
+        onbRender();
+        if (!$("onbDialog").open) $("onbDialog").showModal();
+      }
+
+      function onbHide() {
+        if ($("onbDialog").open) $("onbDialog").close();
+      }
+
+      window.openGuide = onbOpen;
+
+      // ---- welcome. With parts already saved, "example" and "empty" ask for a second click
+      // (they replace them); "keep my parts" goes on without touching anything.
+      function onbStartReplacing(btn, cfg, start) {
+        if (HAD_SAVED_SETUP && btn.dataset.armed !== "1") {
+          btn.dataset.armed = "1";
+          btn.textContent = L("onbConfirmReplace");
+          return;
+        }
+        delete btn.dataset.armed;
+        setConfig(cfg);
+        onbGo({ start });
+      }
+      $("onbStartExample").addEventListener("click", (e) => onbStartReplacing(e.currentTarget, DroidConfig.exampleConfig(), "example"));
+      $("onbStartEmpty").addEventListener("click", (e) => onbStartReplacing(e.currentTarget, DroidConfig.emptyConfig(), "empty"));
+      $("onbStartKeep").addEventListener("click", () => onbGo({ start: "example" }));
+      $("onbStartKeep").hidden = !HAD_SAVED_SETUP;
+      $("onbStartImport").addEventListener("click", () => {
+        $("edImportFile").value = "";
+        $("edImportFile").click();
+        onbGo({ start: "import" });
+      });
+
+      // ---- sketch
+      $("onbLoadFiles").addEventListener("click", () => {
+        $("onbFiles").value = "";
+        $("onbFiles").click();
+      });
+      async function onbAnalyze(files) {
+        onb.files = files;
+        const d = InoDetect.detectSketch(files);
+        onb.state = Object.assign({}, onb.state, { detect: d });
+        onbSave();
+        $("onbSketchNext").disabled = false;
+        onbRender();
+      }
+      $("onbFiles").addEventListener("change", async () => {
+        const list = Array.from($("onbFiles").files || []);
+        if (!list.length) return;
+        const files = await Promise.all(list.map(async (f) => ({ name: f.name, text: await f.text() })));
+        $("onbIno").value = "";
+        onbAnalyze(files);
+      });
+      $("onbAnalyze").addEventListener("click", () => {
+        const text = $("onbIno").value;
+        if (!text.trim()) return;
+        onbAnalyze([{ name: "sketch.ino", text }]);
+      });
+      $("onbSketchNext").addEventListener("click", () => {
+        if (onb.state.detect) onbGo({ detect: onb.state.detect });
+      });
+      $("onbSketchSkip").addEventListener("click", () => onbGo({ skip: true }));
+
+      // ---- patch, flash
+      $("onbPatchNext").addEventListener("click", () => onbGo({}));
+      // the sketch files are not saved: after a reload they are loaded again from the sketch step
+      $("onbPatchBack").addEventListener("click", () => {
+        onb.state = Object.assign({}, onb.state, { step: "sketch" });
+        onbSave();
+        onbRender();
+      });
+      $("onbOpenFlash").addEventListener("click", () => {
+        renderFlash();
+        $("flashDialog").showModal();
+      });
+      $("onbFlashSkip").addEventListener("click", () => onbGo({ skip: true }));
+      window.addEventListener("r2-flash-done", () => {
+        if (onb.state.step === "flash") onbGo({ flashed: true });
+      });
+
+      // ---- connect: 115200, then PING until PONG (the Mega restarts when the port opens and
+      // takes a few seconds to start, so it keeps asking for up to 12 s)
+      $("onbConnect").addEventListener("click", async () => {
+        if (onb.pinging) return;
+        const msg = $("onbConnectMsg");
+        msg.hidden = false;
+        msg.classList.remove("bad");
+        msg.textContent = L("onbConnecting");
+        const want = 115200;
+        $("baud").value = String(want);
+        try {
+          if (serialConnected && parseInt($("baud").dataset.openBaud || "0", 10) !== want) {
+            const p = port;
+            await closePort();
+            await openConsoleOn(p, want);
+          } else if (!serialConnected) {
+            await openPort();
+          }
+        } catch (e) {
+          msg.textContent = "Error: " + (e.message || e);
+        }
+        if (!serialConnected) {
+          msg.classList.add("bad");
+          msg.textContent = L("onbNoPort");
+          return;
+        }
+        onb.pinging = true;
+        let heard = "";
+        const listen = (t) => {
+          heard += t;
+        };
+        serialTextListeners.add(listen);
+        const t0 = Date.now();
+        let pong = false;
+        while (Date.now() - t0 < 12000) {
+          try {
+            await sendOneLine("PING");
+          } catch (_) {}
+          await new Promise((r) => setTimeout(r, 1500));
+          if (/PONG/.test(heard)) {
+            pong = true;
+            break;
+          }
+        }
+        serialTextListeners.delete(listen);
+        onb.pinging = false;
+        if (pong) {
+          msg.textContent = L("onbPong");
+          onbGo({ pong: true });
+        } else {
+          msg.classList.add("bad");
+          msg.innerHTML = L("onbNoPong");
+        }
+      });
+
+      // ---- walk: the guide steps aside so R2 can be clicked, and comes back when the walk ends
+      function onbWalk(board) {
+        if (!serialConnected) {
+          const w = $("onbWalkMsg");
+          w.hidden = false;
+          w.textContent = L("walkNeedSerial");
+          return;
+        }
+        onb.walking = board;
+        onbHide();
+        window.startChannelWalk({ board, from: 1, to: 13 });
+      }
+      $("onbWalkDome").addEventListener("click", () => onbWalk("S1:"));
+      $("onbWalkBody").addEventListener("click", () => onbWalk("S3:"));
+      window.addEventListener("r2-walk-end", () => {
+        if (!onb.walking) return;
+        onb.walked[onb.walking] = true;
+        onb.walking = null;
+        if (onb.state.step === "walk") onbOpen();
+      });
+      $("onbWalkNext").addEventListener("click", () => onbGo({}));
+
+      // ---- done, skip, reopen
+      $("onbExport").addEventListener("click", () => $("edExport").click());
+      $("onbClose").addEventListener("click", () => onbHide());
+      $("onbSkip").addEventListener("click", () => {
+        onb.state = Object.assign({}, onb.state, { skipped: true });
+        onbSave();
+        onbHide();
+      });
+      $("toolGuide").addEventListener("click", () => onbOpen());
+      window.addEventListener("r2-lang", () => {
+        if ($("onbDialog").open) onbRender();
+      });
+
+      if (Onboarding.shouldAutoOpen(onb.state, HAD_SAVED_SETUP)) onbOpen();
+
+
+      $("flashCancel").addEventListener("click", () => {
+        if (!flashBusy) {
+          chooseHexFile(null); // forget the file
+          return;
+        }
+        if (flash.phase === "write" || flash.phase === "verify") return; // too late: it would leave half a program
+        flash.cancelled = true;
+        if (flash.transport) flash.transport.abort();
+      });
 
       applyUiLanguage();
 
@@ -692,8 +2251,9 @@
 
       function setConnected(connected) {
         serialConnected = connected;
-        $("btnConnect").disabled = connected;
-        $("btnDisconnect").disabled = !connected;
+        $("btnConnect").disabled = connected || flashBusy;
+        $("btnDisconnect").disabled = !connected || flashBusy;
+        $("baud").disabled = flashBusy;
         $("btnSend").disabled = !connected;
         document.querySelectorAll(".need-serial").forEach((el) => {
           el.disabled = !connected;
@@ -725,16 +2285,38 @@
         return "S1:";
       }
 
+      /** Servos a holo has: ["h","v"], one of them, or none (a holo that is only a light). */
+      function holoAxes(z) {
+        if (!z || z.kind !== "holo") return [];
+        return Array.isArray(z.axes) ? z.axes.filter((a) => a === "h" || a === "v") : ["h", "v"];
+      }
+
       function updateZoneUi() {
         const z = getCurrentZone();
         const isHolo = z && z.kind === "holo";
         const servoPanel = z && z.kind === "servo";
+        const axes = holoAxes(z);
+        const noServo = isHolo && axes.length === 0;
+        // A holo's H or V controls only when it has that servo; none at all for a light-only holo
+        document.querySelectorAll(".servo-ctl").forEach((el) => el.classList.toggle("is-hidden", noServo));
+        $("holoNoServos").classList.toggle("is-hidden", !noServo);
+        $("wrapSliderH").classList.toggle("is-hidden", noServo || (isHolo && !axes.includes("h")));
         const wrap = $("wrapSliderV");
-        if (wrap) wrap.classList.toggle("is-hidden", !isHolo);
+        if (wrap) wrap.classList.toggle("is-hidden", !isHolo || !axes.includes("v"));
+        const oneAxis = isHolo && axes.length === 1;
+        const axSel = $("holoSaveAxis");
+        if (oneAxis) {
+          axSel.value = axes[0];
+          axSel.dataset.forced = "1";
+        } else if (axSel.dataset.forced) {
+          axSel.value = "hv";                          // undo the value forced by a one-servo holo
+          delete axSel.dataset.forced;
+        }
+        document.querySelectorAll(".holo-axis-ctl").forEach((el) => el.classList.toggle("is-hidden", oneAxis));
         const pref = $("labelSliderHPref");
         if (pref) pref.textContent = isHolo ? L("servoHorizontalH") : L("pwmServo");
         if (isHolo) {
-          $("btnSendPos").textContent = L("sendPosHolo");
+          $("btnSendPos").textContent = oneAxis ? L(axes[0] === "h" ? "sendPosHoloH" : "sendPosHoloV") : L("sendPosHolo");
         } else if (servoPanel) {
           $("btnSendPos").textContent = L("sendPosPanel", { panel: getMdPanel2(z) });
         } else {
@@ -788,42 +2370,84 @@
         });
       }
 
-      async function startReadLoop() {
+      function startReadLoop() {
+        const p = port;
+        readLoopDone = readLoop();
+        // The loop ends by itself only when the port is gone (USB unplugged): close what is left
+        // so Connect works again without reloading the page.
+        readLoopDone.then((lost) => {
+          if (lost && port === p) onConsoleLost();
+        });
+        return readLoopDone;
+      }
+
+      async function onConsoleLost() {
+        await releaseConsole();
+        setConnected(false);
+        statusEl.textContent = L("statusLost");
+        statusEl.classList.add("error");
+      }
+
+      /** Functions that get every piece of text the Mega sends (the guide waits for PONG). */
+      const serialTextListeners = new Set();
+
+      async function readLoop() {
         readLoopAbort = false;
         const decoder = new TextDecoder();
-        if (!port || !port.readable) return;
+        if (!port || !port.readable) return false;
         reader = port.readable.getReader();
+        let lost = false;
         try {
           while (!readLoopAbort) {
             const { value, done } = await reader.read();
-            if (done) break;
+            if (done) {
+              lost = !readLoopAbort;
+              break;
+            }
             if (value && value.length) {
-              appendLog("← ", decoder.decode(value, { stream: true }));
+              const text = decoder.decode(value, { stream: true });
+              appendLog("← ", text);
+              serialTextListeners.forEach((f) => {
+                try {
+                  f(text);
+                } catch (_) {}
+              });
             }
           }
         } catch (e) {
-          if (!readLoopAbort) appendLog("! ", L("logReadErr") + (e.message || e));
+          if (!readLoopAbort) {
+            appendLog("! ", L("logReadErr") + (e.message || e));
+            lost = true;
+          }
         } finally {
           try {
             reader.releaseLock();
           } catch (_) {}
           reader = null;
         }
+        return lost;
+      }
+
+      /** Opens `p` for the console at `baud`: text writer + read loop. Throws if it cannot open. */
+      async function openConsoleOn(p, baud) {
+        await p.open({ baudRate: baud });
+        port = p;
+        $("baud").dataset.openBaud = String(baud);
+        const enc = new TextEncoderStream();
+        pipeDone = enc.readable.pipeTo(p.writable).catch(() => {});
+        writer = enc.writable.getWriter();
+        statusEl.textContent = L("statusConnected", { baud });
+        setConnected(true);
+        startReadLoop();
       }
 
       async function openPort() {
+        if (flashBusy) return;
+        let p = null;
         try {
-          port = await navigator.serial.requestPort();
+          p = await navigator.serial.requestPort();
           const baud = parseInt($("baud").value, 10) || 115200;
-          await port.open({ baudRate: baud });
-
-          const enc = new TextEncoderStream();
-          enc.readable.pipeTo(port.writable).catch(() => {});
-          writer = enc.writable.getWriter();
-
-          statusEl.textContent = L("statusConnected", { baud });
-          setConnected(true);
-          startReadLoop();
+          await openConsoleOn(p, baud);
         } catch (e) {
           if (e.name === "NotFoundError") return;
           statusEl.textContent = "Error: " + (e.message || e);
@@ -834,23 +2458,42 @@
         }
       }
 
-      async function closePort() {
+      /**
+       * Stops the console's reader and writer and closes the port, waiting until the streams
+       * are unlocked (port.close() fails on a locked stream). Returns the SerialPort it closed.
+       */
+      /** Waits for `pr` at most `ms` (a port whose USB is gone must not hang the page). */
+      function within(pr, ms) {
+        return Promise.race([Promise.resolve(pr).catch(() => {}), new Promise((r) => setTimeout(r, ms))]);
+      }
+
+      async function releaseConsole() {
+        const p = port;
         readLoopAbort = true;
         try {
-          if (reader) {
-            await reader.cancel();
-          }
+          if (reader) await reader.cancel();
         } catch (_) {}
         try {
-          if (writer) {
-            await writer.close();
-          }
+          if (readLoopDone) await readLoopDone;
+        } catch (_) {}
+        readLoopDone = null;
+        try {
+          if (writer) await within(writer.close(), 1000);
         } catch (_) {}
         writer = null;
         try {
-          if (port) await port.close();
+          if (pipeDone) await within(pipeDone, 1000);
+        } catch (_) {}
+        pipeDone = null;
+        try {
+          if (p) await within(p.close(), 1000);
         } catch (_) {}
         port = null;
+        return p;
+      }
+
+      async function closePort() {
+        await releaseConsole();
         setConnected(false);
       }
 
@@ -950,7 +2593,7 @@
           }
         } catch (_) {}
         try {
-          const json = localStorage.getItem(PWM_RANGE_LS);
+          const json = DROID_STORE.getItem(PWM_RANGE_LS);
           if (json) {
             const o = JSON.parse(json);
             if (o && typeof o === "object") return o;
@@ -971,7 +2614,7 @@
             ";SameSite=Lax";
         } catch (_) {}
         try {
-          localStorage.setItem(PWM_RANGE_LS, json);
+          DROID_STORE.setItem(PWM_RANGE_LS, json);
         } catch (_) {}
       }
 
@@ -1051,7 +2694,7 @@
         if (zone.mdPanel != null && zone.mdPanel !== "") {
           return String(zone.mdPanel).replace(/\D/g, "").padStart(2, "0").slice(-2);
         }
-        const si = Math.max(0, Math.min(12, Math.round(Number(zone.servoIndex))));
+        const si = Math.max(0, Math.round(Number(zone.servoIndex)));
         return String(si + 1).padStart(2, "0");
       }
 
@@ -1122,8 +2765,12 @@
           return;
         }
 
-        const saveAxis = $("holoSaveAxis").value || "hv";
-        const cmds = buildHoloCommands(mode, z.holoId, h, v, saveAxis);
+        const axes = holoAxes(z);
+        if (!axes.length) return;                      // a light-only holo has no servo to move
+        const saveAxis = axes.length === 1 ? axes[0] : $("holoSaveAxis").value || "hv";
+        let cmds = buildHoloCommands(mode, z.holoId, h, v, saveAxis);
+        // *MHxx / *MVxx: a one-servo holo only gets its own axis
+        if (mode === "test" && axes.length === 1) cmds = cmds.filter((c) => c.charAt(2) === axes[0].toUpperCase());
         if (cmds.length === 0) return;
         try {
           for (const c of cmds) await sendOneLine(c);
@@ -1198,7 +2845,8 @@
       }
 
       function selectZone(index) {
-        if (index < 0) index = R2_BLUEPRINT_ZONES.length - 1;
+        if (!R2_BLUEPRINT_ZONES.length) index = -1;
+        else if (index < 0) index = R2_BLUEPRINT_ZONES.length - 1;
         if (index >= R2_BLUEPRINT_ZONES.length) index = 0;
         if (index !== selectedZoneIndex) {
           const prev = getCurrentZone();
@@ -1216,6 +2864,7 @@
         });
         applyStoredPwmRangeForZone(z);
         updateZoneUi();
+        renderEditor();
       }
 
       function getZoneIndexByClick(xPct, yPct) {
@@ -1271,6 +2920,7 @@
             lab.textContent = zlab;
             d.appendChild(lab);
             d.addEventListener("click", () => {
+              if (placing2d) return;                  // the stage handler places the marker
               selectZone(i);
             });
             box.appendChild(d);
@@ -1278,14 +2928,6 @@
         });
       }
 
-      // What the 3D view (r2view3d.js) needs from the console
-      window.R2Console = {
-        zones: R2_BLUEPRINT_ZONES,
-        selectZone: (i) => selectZone(i),
-        selected: () => selectedZoneIndex,
-        label: (z) => zoneDisplayLabel(z),
-        lang: () => uiLang,
-      };
 
       $("zoneSelect").addEventListener("change", () => {
         selectZone(parseInt($("zoneSelect").value, 10) || 0);
@@ -1300,8 +2942,6 @@
       $("pwmMin").addEventListener("change", onPwmRangeFieldChange);
       $("pwmMax").addEventListener("change", onPwmRangeFieldChange);
       $("blueprintStage").addEventListener("click", (e) => {
-        // Si el usuario clicó justo sobre un hotspot, déjalo que lo gestione su propio handler.
-        if (e.target && e.target.closest && e.target.closest(".hotspot")) return;
         // The 3D view handles its own clicks (pick a marker, or place one); this nearest-
         // hotspot guess is only for the flat blueprint
         if (e.target && e.target.closest && e.target.closest("#r2view")) return;
@@ -1312,12 +2952,22 @@
         const yPx = e.clientY - rect.top;
         const xPct = (xPx / rect.width) * 100;
         const yPct = (yPx / rect.height) * 100;
+        if (walk.pick2d) {
+          walkSpot({ map2d: [spot2d(xPct, yPct)] });
+          return;
+        }
+        if (placing2d) {
+          placeOn2d(xPct, yPct);
+          return;
+        }
+        // Si el usuario clicó justo sobre un hotspot, déjalo que lo gestione su propio handler.
+        if (e.target && e.target.closest && e.target.closest(".hotspot")) return;
 
         // Modo calibración manual (batch): log con zona seleccionada + coords.
         const current = getCurrentZone();
         const zoneLabel = current ? zoneDisplayLabel(current) : L("mapLogNoZone");
         const zoneKey = current
-          ? (current.kind === "holo" ? "holo:" + current.holoId : "servo:" + current.servoIndex)
+          ? (current.kind === "holo" ? "holo:" + current.holoId : "servo:" + current.id)
           : "none";
         const line =
           "[map] " +
@@ -1355,7 +3005,7 @@
 
       $("uiLang").addEventListener("change", () => {
         uiLang = $("uiLang").value === "es" ? "es" : "en";
-        localStorage.setItem(LANG_KEY, uiLang);
+        try { DROID_STORE.setItem(LANG_KEY, uiLang); } catch (_) {}
         applyUiLanguage();
         window.dispatchEvent(new Event("r2-lang"));      // the 3D view relabels its buttons
         if (window.R2View3D) window.R2View3D.setSelected(selectedZoneIndex);
