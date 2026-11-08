@@ -361,6 +361,49 @@
     .wrap-slider-v.is-hidden,
     label.wrap-slider-v.is-hidden { display: none !important; }
     select:disabled { opacity: 0.5; cursor: not-allowed; }
+    .is-hidden { display: none !important; }
+    /* Part editor (behind the pencil of the 3D view) */
+    .marker-editor {
+      margin-top: 0.75rem;
+      padding: 0.75rem;
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      background: var(--bg);
+    }
+    .marker-editor[hidden] { display: none; }
+    .marker-editor h3 { font-size: 0.9rem; margin: 0 0 0.25rem; }
+    .marker-editor .hint { margin: 0 0 0.5rem; }
+    .marker-editor .ed-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 0.6rem; }
+    .marker-editor .ed-grid > div { display: flex; flex-direction: column; min-width: 0; }
+    .marker-editor .ed-grid label { display: block; margin: 0 0 0.15rem; }
+    .marker-editor input[type="text"] {
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.35rem 0.5rem;
+      font-size: 0.9rem;
+      width: 100%;
+    }
+    .marker-editor select { padding: 0.35rem 0.5rem; font-size: 0.9rem; background: var(--panel); }
+    .marker-editor input.ed-bad { border-color: var(--err); }
+    .marker-editor .ed-axes { display: flex; gap: 1rem; align-items: center; }
+    .marker-editor .ed-axes label { display: flex; align-items: center; gap: 0.3rem; color: var(--text); margin: 0; }
+    .marker-editor .ed-buttons { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.6rem; }
+    .marker-editor .ed-buttons button { flex: 1 1 auto; padding: 0.35rem 0.6rem; font-size: 0.8rem; }
+    .ed-error { color: var(--err); font-size: 0.8rem; margin: 0.4rem 0 0; font-weight: 600; }
+    .ed-msg { font-size: 0.8rem; margin: 0.4rem 0 0; color: var(--ok); }
+    .ed-msg.bad { color: var(--err); font-weight: 600; }
+    .ed-prompt {
+      margin-top: 0.6rem;
+      padding: 0.5rem 0.6rem;
+      border: 1px solid var(--warn);
+      border-radius: 6px;
+    }
+    .ed-prompt[hidden] { display: none; }
+    .ed-prompt p { margin: 0 0 0.4rem; font-size: 0.85rem; }
+    .ed-prompt div { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+    .ed-prompt button { padding: 0.3rem 0.7rem; font-size: 0.8rem; }
   </style>
 </head>
 <body>
@@ -462,7 +505,38 @@
           <button type="button" class="btn-ghost" id="zonePrev" data-i18n="zonePrev">◀ Previous</button>
           <button type="button" class="btn-ghost" id="zoneNext" data-i18n="zoneNext">Next ▶</button>
         </div>
-        <div class="row" style="margin-top: 0.25rem; align-items: flex-end; gap: 0.75rem;">
+        <div class="marker-editor" id="markerEditor" hidden>
+          <h3 data-i18n="edTitle">Droid parts</h3>
+          <p class="hint" id="edHint" data-i18n="edHint">Each change is saved in this browser as soon as it is valid.</p>
+          <div class="ed-grid" id="edFields">
+            <div><label for="edName" data-i18n="edNameEn">Name (English)</label><input type="text" id="edName" maxlength="60" /></div>
+            <div><label for="edNameEs" data-i18n="edNameEs">Name (Spanish)</label><input type="text" id="edNameEs" maxlength="60" /></div>
+            <div><label for="edKind" data-i18n="edKind">Type</label>
+              <select id="edKind"><option value="servo" data-i18n="optKindServo">Servo</option><option value="holo" data-i18n="optKindHolo">Holo</option></select></div>
+            <div><label for="edBoard" data-i18n="edBoard">Board</label>
+              <select id="edBoard"><option value="S1:" data-i18n="optBoardS1">Dome (S1:)</option><option value="S3:" data-i18n="optBoardS3">Body (S3:)</option></select></div>
+            <div><label for="edChannel" id="edChannelLabel">Channel</label><input type="text" id="edChannel" maxlength="2" inputmode="numeric" /></div>
+            <div id="edAxesBox"><label data-i18n="edAxes">Holo servos</label>
+              <span class="ed-axes"><label><input type="checkbox" id="edAxisH" /> <span data-i18n="edAxisH">H (horizontal)</span></label>
+              <label><input type="checkbox" id="edAxisV" /> <span data-i18n="edAxisV">V (vertical)</span></label></span></div>
+          </div>
+          <p class="ed-error" id="edError" hidden></p>
+          <div class="ed-buttons">
+            <button type="button" class="btn-ok" id="edAdd" data-i18n="edAdd">Add part</button>
+            <button type="button" class="btn-warn" id="edDelete" data-i18n="edDelete">Delete</button>
+          </div>
+          <div class="ed-buttons">
+            <button type="button" class="btn-ghost" id="edExport" data-i18n="edExport">Export file</button>
+            <button type="button" class="btn-ghost" id="edImport" data-i18n="edImport">Import file</button>
+            <button type="button" class="btn-ghost" id="edExample" data-i18n="edExample">Load example</button>
+            <button type="button" class="btn-ghost" id="edEmpty" data-i18n="edEmpty">Start empty</button>
+            <input type="file" id="edImportFile" accept=".json,application/json" hidden />
+          </div>
+          <div class="ed-prompt" id="edPrompt" hidden><p id="edPromptText"></p><div id="edPromptBtns"></div></div>
+          <p class="ed-msg" id="edMsg" hidden></p>
+        </div>
+        <p class="hint is-hidden" id="holoNoServos" data-i18n="holoNoServos">This holo has no servos (light only).</p>
+        <div class="row servo-ctl" style="margin-top: 0.25rem; align-items: flex-end; gap: 0.75rem;">
           <span class="hint" id="holoLiveHint" style="flex: 1; margin: 0; display: none;" data-i18n-title="holoLiveTitle" data-i18n-html="holoLiveHint"></span>
           <button type="button" class="btn-ok need-serial" id="btnSaveOpen" disabled data-i18n-title="titleSaveMax">
             Save MAX
@@ -470,22 +544,24 @@
           <button type="button" class="btn-warn need-serial" id="btnSaveClosed" disabled data-i18n-title="titleSaveMin">
             Save MIN
           </button>
-          <label for="holoSaveAxis" style="margin: 0;" data-i18n="labelHolo">Holo</label>
-          <select id="holoSaveAxis" class="need-serial" data-i18n-title="titleHoloSaveAxis">
+          <label for="holoSaveAxis" class="holo-axis-ctl" style="margin: 0;" data-i18n="labelHolo">Holo</label>
+          <select id="holoSaveAxis" class="need-serial holo-axis-ctl" data-i18n-title="titleHoloSaveAxis">
             <option value="hv" selected>H+V</option>
             <option value="h">H only</option>
             <option value="v">V only</option>
           </select>
         </div>
-        <label class="pwm-inline"><span data-i18n="pwmMinLabel">PWM min.</span> <input type="number" id="pwmMin" value="800" min="0" max="4095" step="1" /> <span data-i18n="pwmMaxLabel">max.</span> <input type="number" id="pwmMax" value="2200" min="0" max="4095" step="1" /></label>
+        <label class="pwm-inline servo-ctl"><span data-i18n="pwmMinLabel">PWM min.</span> <input type="number" id="pwmMin" value="800" min="0" max="4095" step="1" /> <span data-i18n="pwmMaxLabel">max.</span> <input type="number" id="pwmMax" value="2200" min="0" max="4095" step="1" /></label>
+        <div class="servo-ctl" id="wrapSliderH">
         <label id="labelSliderH"><span id="labelSliderHPref">PWM servo</span> — <span class="slider-val" id="valH">1500</span></label>
         <input type="range" id="sliderH" class="need-serial" min="500" max="2500" value="1500" disabled />
-        <div class="wrap-slider-v" id="wrapSliderV">
+        </div>
+        <div class="wrap-slider-v servo-ctl" id="wrapSliderV">
         <label><span data-i18n="labelSliderVPrefix">Vertical servo (V)</span> — <span class="slider-val" id="valV">1500</span></label>
         <input type="range" id="sliderV" class="need-serial" min="500" max="2500" value="1500" disabled />
         </div>
-        <label style="margin-top: 0.75rem;"><input type="checkbox" id="autoSend" checked /> <span data-i18n="chkAutoSend">Send automatically when moving the slider</span></label>
-        <div class="row" style="margin-top: 0.75rem;">
+        <label class="servo-ctl" style="margin-top: 0.75rem;"><input type="checkbox" id="autoSend" checked /> <span data-i18n="chkAutoSend">Send automatically when moving the slider</span></label>
+        <div class="row servo-ctl" style="margin-top: 0.75rem;">
           <button type="button" class="btn-primary need-serial" id="btnSendPos" disabled data-i18n="btnSend">Send</button>
         </div>
         <div class="blueprint-actions">
@@ -496,7 +572,7 @@
           <button type="button" class="btn-warn need-serial" id="btnPanelClose" disabled data-i18n="btnClosePanel">
             Close panel
           </button>
-          <button type="button" class="btn-ghost need-serial" id="btnCenterServos" disabled data-i18n="btnCenter">
+          <button type="button" class="btn-ghost need-serial servo-ctl" id="btnCenterServos" disabled data-i18n="btnCenter">
             Center
           </button>
           <button type="button" class="btn-ghost need-serial" id="btnCenterAllHolos" disabled data-i18n="btnCenterAllHolos">
@@ -522,7 +598,24 @@
      * Servos panel (b* body + s* dome): mismos comandos Marcduino :MV/:OP/:CL y #SO/#SC (xx = mdPanel). Solo cambia el prefijo serie (body S3:, dome S1:).
      * Holo: *MHxxdddd/*MVxxdddd; EEPROM #HO/#HC (H máx/mín), #VO/#VC (V máx/mín); *CHxx centrar (BetterDuino).
      */
-    let R2_BLUEPRINT_ZONES = DroidConfig.toZones(DroidConfig.loadConfig((function () { try { return localStorage; } catch (e) { return { getItem: function () { return null; } }; } })()) || DroidConfig.exampleConfig());
+    /** localStorage, or a stand-in in memory when the browser gives no storage (blocked site data). */
+    const DROID_STORE = (function () {
+      try {
+        const s = window.localStorage;
+        s.getItem("shadowmd_probe");
+        return s;
+      } catch (e) {
+        const mem = {};
+        return {
+          getItem: (k) => (Object.prototype.hasOwnProperty.call(mem, k) ? mem[k] : null),
+          setItem: (k, v) => { mem[k] = String(v); },
+          removeItem: (k) => { delete mem[k]; },
+        };
+      }
+    })();
+    /** The droid configuration in use (markers); R2_BLUEPRINT_ZONES is computed from it. */
+    let droidConfig = DroidConfig.loadConfig(DROID_STORE) || DroidConfig.exampleConfig();
+    let R2_BLUEPRINT_ZONES = DroidConfig.toZones(droidConfig);
 
     (function () {
       const LANG_KEY = "shadowmd-lite-ui-lang";
@@ -536,7 +629,7 @@
         window.SHADOWMD_LITE_I18N.es
           ? window.SHADOWMD_LITE_I18N
           : { en: {}, es: {} };
-      let uiLang = localStorage.getItem(LANG_KEY) === "es" ? "es" : "en";
+      let uiLang = DROID_STORE.getItem(LANG_KEY) === "es" ? "es" : "en";
 
       const $ = (id) => document.getElementById(id);
       const logEl = $("log");
@@ -642,6 +735,385 @@
         }
       }
 
+      // ------------------------------------------------------------ droid configuration
+      // Every change goes through commitConfig: validate, save, recompute the zones, refill
+      // the zone selector and rebuild the 3D markers. A configuration with errors is refused.
+
+      function cloneConfig(cfg) {
+        return JSON.parse(JSON.stringify({ version: cfg.version, markers: cfg.markers }));
+      }
+
+      function findMarker(id) {
+        return droidConfig.markers.find((m) => m.id === id) || null;
+      }
+
+      /** After the markers change: zones, selector, hotspots, 3D view; keep (or move to) selectId. */
+      function refreshZones(selectId) {
+        const prev = getCurrentZone();
+        R2_BLUEPRINT_ZONES = DroidConfig.toZones(droidConfig);
+        const keepId = selectId !== undefined ? selectId : prev && prev.id;
+        let idx = R2_BLUEPRINT_ZONES.findIndex((z) => z.id === keepId);
+        // The PWM fields belong to the zone that was selected: keep them with it when it
+        // still exists, and never copy them onto another zone
+        if (prev && idx >= 0 && prev.id !== keepId && R2_BLUEPRINT_ZONES.some((z) => z.id === prev.id)) {
+          persistPwmRangeForZoneFromInputs(prev);
+        }
+        if (idx < 0) idx = Math.min(Math.max(selectedZoneIndex, 0), R2_BLUEPRINT_ZONES.length - 1);
+        selectedZoneIndex = idx;
+        fillZoneSelect();
+        renderHotspots();
+        if (window.R2View3D) window.R2View3D.rebuild();
+        selectZone(idx);
+      }
+
+      function commitConfig(cfg, selectId) {
+        const v = DroidConfig.validateConfig(cfg);
+        if (!v.ok) return v;
+        droidConfig = cloneConfig(cfg);
+        DroidConfig.saveConfig(DROID_STORE, droidConfig);
+        refreshZones(selectId);
+        return v;
+      }
+
+      function firstFreeChannel(cfg, board) {
+        const used = new Set(cfg.markers.filter((m) => m.kind === "servo" && m.board === board).map((m) => m.channel));
+        for (let n = 1; n <= 99; n++) {
+          const ch = String(n).padStart(2, "0");
+          if (!used.has(ch)) return ch;
+        }
+        return null;
+      }
+
+      function firstFreeHoloId(cfg) {
+        const used = new Set(cfg.markers.filter((m) => m.kind === "holo").map((m) => m.holoId));
+        for (let n = 1; n <= 99; n++) {
+          const ch = String(n).padStart(2, "0");
+          if (!used.has(ch)) return ch;
+        }
+        return null;
+      }
+
+      /** Merge patch into marker id (a key set to undefined is removed). Refused if invalid. */
+      function updateMarker(id, patch) {
+        const i = droidConfig.markers.findIndex((m) => m.id === id);
+        if (i < 0) return { ok: false, errors: [{ id, code: "not-found" }] };
+        const m = Object.assign({}, droidConfig.markers[i], patch, { id });
+        Object.keys(patch || {}).forEach((k) => { if (patch[k] === undefined) delete m[k]; });
+        if (m.kind === "holo") {
+          delete m.channel;
+          if (!Array.isArray(m.axes)) m.axes = ["h", "v"];
+        } else {
+          delete m.holoId;
+          delete m.axes;
+        }
+        const cfg = cloneConfig(droidConfig);
+        cfg.markers[i] = m;
+        return commitConfig(cfg, id);
+      }
+
+      /** A new servo (body, first free channel) or holo (axes H and V); returns its id, or null. */
+      function addMarker(kind) {
+        const cfg = cloneConfig(droidConfig);
+        const id = DroidConfig.newMarkerId(cfg);
+        let m;
+        if (kind === "holo") {
+          const holoId = firstFreeHoloId(cfg);
+          if (!holoId) return null;
+          m = { id, name: STR.en.newHolo, nameEs: STR.es.newHolo, kind: "holo", board: "S1:", holoId, axes: ["h", "v"] };
+        } else {
+          const channel = firstFreeChannel(cfg, "S3:");
+          if (!channel) return null;
+          m = { id, name: STR.en.newPart, nameEs: STR.es.newPart, kind: "servo", board: "S3:", channel };
+        }
+        cfg.markers.push(m);
+        // Ids are reused (m1, m2…): a new part must not inherit a range left by an old one
+        const map = readPwmRangesMap();
+        if (Object.prototype.hasOwnProperty.call(map, id)) {
+          delete map[id];
+          writePwmRangesMap(map);
+        }
+        return commitConfig(cfg, id).ok ? id : null;
+      }
+
+      /** Delete a marker, and its PWM range with it. */
+      function removeMarker(id) {
+        if (!findMarker(id)) return { ok: false, errors: [{ id, code: "not-found" }] };
+        const cfg = cloneConfig(droidConfig);
+        cfg.markers = cfg.markers.filter((m) => m.id !== id);
+        const v = commitConfig(cfg);
+        if (v.ok) {
+          const map = readPwmRangesMap();
+          if (Object.prototype.hasOwnProperty.call(map, id)) {
+            delete map[id];
+            writePwmRangesMap(map);
+          }
+        }
+        return v;
+      }
+
+      /** Replace the whole configuration; refused (and returned) when validateConfig finds errors. */
+      function setConfig(cfg) {
+        return commitConfig(cloneConfig(cfg));
+      }
+
+      // What the 3D view (r2view3d.js) needs from the console
+      window.R2Console = {
+        get zones() { return R2_BLUEPRINT_ZONES; },
+        get config() { return droidConfig; },
+        selectZone: (i) => selectZone(i),
+        selected: () => selectedZoneIndex,
+        label: (z) => zoneDisplayLabel(z),
+        lang: () => uiLang,
+        updateMarker,
+        addMarker,
+        removeMarker,
+        setConfig,
+      };
+
+      // ------------------------------------------------------------ part editor (pencil)
+
+      function markerLabel(id) {
+        const z = R2_BLUEPRINT_ZONES.find((zz) => zz.id === id);
+        return z ? zoneDisplayLabel(z) + " (" + id + ")" : id;
+      }
+
+      function errorText(e, board, channel) {
+        if (e.code === "duplicate-channel") return L("edErrDuplicate", { channel: board + channel, other: markerLabel(e.other) });
+        if (e.code === "bad-channel") return L("edErrChannel");
+        if (e.code === "missing-name") return L("edErrName");
+        if (e.code === "bad-kind") return L("edErrKind");
+        return e.code;
+      }
+
+      function showEditorError(text) {
+        const el = $("edError");
+        el.textContent = text || "";
+        el.hidden = !text;
+        $("edChannel").classList.toggle("ed-bad", !!text);
+      }
+
+      function showEditorMsg(text, bad) {
+        const el = $("edMsg");
+        el.textContent = text || "";
+        el.hidden = !text;
+        el.classList.toggle("bad", !!bad);
+      }
+
+      /** In-page question (never window.confirm): text plus buttons [{label, cls, fn}]. */
+      function askInPage(text, buttons) {
+        $("edPromptText").textContent = text;
+        const box = $("edPromptBtns");
+        box.innerHTML = "";
+        buttons.forEach((b) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = b.cls || "btn-ghost";
+          btn.textContent = b.label;
+          btn.addEventListener("click", () => {
+            $("edPrompt").hidden = true;
+            if (b.fn) b.fn();
+          });
+          box.appendChild(btn);
+        });
+        $("edPrompt").hidden = false;
+      }
+
+      /** Fill the editor from the selected marker (drops whatever invalid draft was there). */
+      function renderEditor() {
+        const z = getCurrentZone();
+        const m = z ? findMarker(z.id) : null;
+        const fields = ["edName", "edNameEs", "edKind", "edBoard", "edChannel", "edAxisH", "edAxisV", "edDelete"];
+        fields.forEach((id) => { $(id).disabled = !m; });
+        $("edHint").textContent = m ? L("edHint") : L("edNoParts");
+        showEditorError("");
+        if (!m) {
+          ["edName", "edNameEs", "edChannel"].forEach((id) => { $(id).value = ""; });
+          $("edAxesBox").classList.add("is-hidden");
+          return;
+        }
+        $("edName").value = m.name || "";
+        $("edNameEs").value = m.nameEs || "";
+        $("edKind").value = m.kind;
+        $("edBoard").value = m.board;
+        const holo = m.kind === "holo";
+        $("edChannel").value = (holo ? m.holoId : m.channel) || "";
+        $("edChannelLabel").textContent = L(holo ? "edHoloId" : "edChannel");
+        $("edAxesBox").classList.toggle("is-hidden", !holo);
+        const axes = Array.isArray(m.axes) ? m.axes : [];
+        $("edAxisH").checked = axes.includes("h");
+        $("edAxisV").checked = axes.includes("v");
+      }
+
+      function twoDigits(v) {
+        const t = String(v || "").trim();
+        return /^\d$/.test(t) ? "0" + t : t;
+      }
+
+      /** Save what the editor fields say; on a conflict show it in red and keep the draft. */
+      function applyEditorFields() {
+        const z = getCurrentZone();
+        if (!z) return;
+        const kind = $("edKind").value;
+        const board = $("edBoard").value;
+        const ch = twoDigits($("edChannel").value);
+        $("edChannel").value = ch;
+        const nameEs = $("edNameEs").value.trim();
+        const patch = { name: $("edName").value.trim(), nameEs: nameEs || undefined, kind, board };
+        if (kind === "holo") {
+          patch.holoId = ch;
+          patch.axes = ["h", "v"].filter((a) => $(a === "h" ? "edAxisH" : "edAxisV").checked);
+        } else {
+          patch.channel = ch;
+        }
+        const v = updateMarker(z.id, patch);
+        if (!v.ok) {
+          const mine = v.errors.filter((e) => e.id === z.id);
+          showEditorError(L("edNotSaved") + (mine.length ? mine : v.errors).map((e) => errorText(e, board, ch)).join(" "));
+        }
+      }
+
+      ["edName", "edNameEs", "edBoard", "edChannel", "edAxisH", "edAxisV"].forEach((id) => {
+        $(id).addEventListener("change", applyEditorFields);
+      });
+      // A new type starts on a free channel / holo number; a new holo proposes both axes
+      $("edKind").addEventListener("change", () => {
+        const holo = $("edKind").value === "holo";
+        const others = { markers: droidConfig.markers.filter((m) => !getCurrentZone() || m.id !== getCurrentZone().id) };
+        $("edChannel").value = (holo ? firstFreeHoloId(others) : firstFreeChannel(others, $("edBoard").value)) || "";
+        if (holo) {
+          $("edBoard").value = "S1:";          // the holos hang off the dome board
+          $("edAxisH").checked = true;
+          $("edAxisV").checked = true;
+        }
+        applyEditorFields();
+      });
+
+      $("edAdd").addEventListener("click", () => {
+        $("edPrompt").hidden = true;
+        showEditorMsg("");
+        const id = addMarker("servo");
+        if (!id) {
+          showEditorMsg(L("edNoFreeChannel"), true);
+          return;
+        }
+        // Straight to "click on R2 to place it"
+        if (window.R2View3D && window.R2View3D.place) window.R2View3D.place();
+      });
+
+      $("edDelete").addEventListener("click", () => {
+        const z = getCurrentZone();
+        if (!z) return;
+        showEditorMsg("");
+        askInPage(L("edAskDelete", { name: zoneDisplayLabel(z) }), [
+          { label: L("edDelete"), cls: "btn-warn", fn: () => removeMarker(z.id) },
+          { label: L("edCancel") },
+        ]);
+      });
+
+      $("edExport").addEventListener("click", () => {
+        const ranges = readPwmRangesMap();
+        const text = DroidConfig.serializeConfig(droidConfig, Object.keys(ranges).length ? ranges : undefined);
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+        a.download = "shadowmd-droid-config.json";
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      });
+
+      $("edImport").addEventListener("click", () => {
+        $("edPrompt").hidden = true;
+        showEditorMsg("");
+        $("edImportFile").value = "";
+        $("edImportFile").click();
+      });
+
+      const IMPORT_ERRORS = { "bad-json": "impErrBadJson", "bad-format": "impErrBadFormat", "bad-version": "impErrBadVersion", invalid: "impErrInvalid" };
+
+      /** parseConfig plus what the console itself needs: unique ids, known boards. */
+      function readImport(text) {
+        const parsed = DroidConfig.parseConfig(text);
+        const ids = new Set();
+        parsed.config.markers.forEach((m) => {
+          if (typeof m.id !== "string" || !m.id || ids.has(m.id) || (m.board !== "S1:" && m.board !== "S3:")) {
+            throw new Error("bad marker");
+          }
+          ids.add(m.id);
+        });
+        const ranges = {};
+        if (parsed.pwmRanges && !Array.isArray(parsed.pwmRanges)) {
+          Object.keys(parsed.pwmRanges).forEach((k) => {
+            const r = parsed.pwmRanges[k];
+            if (r && typeof r === "object" && Number.isFinite(Number(r.min)) && Number.isFinite(Number(r.max))) {
+              ranges[k] = { min: Number(r.min), max: Number(r.max) };
+            }
+          });
+        }
+        return { config: parsed.config, pwmRanges: Object.keys(ranges).length ? ranges : null };
+      }
+
+      function applyImport(data, withRanges) {
+        const v = setConfig(data.config);
+        if (!v.ok) {
+          showEditorMsg(L("impErrInvalid"), true);
+          return;
+        }
+        if (withRanges && data.pwmRanges) {
+          writePwmRangesMap(Object.assign(readPwmRangesMap(), data.pwmRanges));
+          applyStoredPwmRangeForZone(getCurrentZone());
+        }
+        showEditorMsg(L("impDone", { n: data.config.markers.length }));
+      }
+
+      $("edImportFile").addEventListener("change", () => {
+        const f = $("edImportFile").files && $("edImportFile").files[0];
+        if (!f) return;
+        const fr = new FileReader();
+        fr.onerror = () => showEditorMsg(L("impErrGeneric"), true);
+        fr.onload = () => {
+          let data;
+          try {
+            data = readImport(String(fr.result));
+          } catch (e) {
+            // Any error at all (even a TypeError from a broken marker): say so, change nothing
+            showEditorMsg(L((e && IMPORT_ERRORS[e.code]) || "impErrGeneric"), true);
+            return;
+          }
+          if (data.pwmRanges) {
+            askInPage(L("impAskPwm", { n: Object.keys(data.pwmRanges).length }), [
+              { label: L("impWithPwm"), cls: "btn-ok", fn: () => applyImport(data, true) },
+              { label: L("impPartsOnly"), fn: () => applyImport(data, false) },
+              { label: L("edCancel") },
+            ]);
+          } else {
+            applyImport(data, false);
+          }
+        };
+        fr.readAsText(f);
+      });
+
+      // Load example / start empty change only the markers, never the PWM ranges
+      $("edExample").addEventListener("click", () => {
+        showEditorMsg("");
+        askInPage(L("edAskExample"), [
+          { label: L("edExample"), cls: "btn-warn", fn: () => setConfig(DroidConfig.exampleConfig()) },
+          { label: L("edCancel") },
+        ]);
+      });
+      $("edEmpty").addEventListener("click", () => {
+        showEditorMsg("");
+        askInPage(L("edAskEmpty"), [
+          { label: L("edEmpty"), cls: "btn-warn", fn: () => setConfig(DroidConfig.emptyConfig()) },
+          { label: L("edCancel") },
+        ]);
+      });
+
+      // The pencil of the 3D view opens and closes the editor
+      window.addEventListener("r2-edit", (e) => {
+        $("markerEditor").hidden = !e.detail;
+        if (e.detail) renderEditor();
+      });
+
       applyUiLanguage();
 
       if (!("serial" in navigator)) {
@@ -685,16 +1157,38 @@
         return "S1:";
       }
 
+      /** Servos a holo has: ["h","v"], one of them, or none (a holo that is only a light). */
+      function holoAxes(z) {
+        if (!z || z.kind !== "holo") return [];
+        return Array.isArray(z.axes) ? z.axes.filter((a) => a === "h" || a === "v") : ["h", "v"];
+      }
+
       function updateZoneUi() {
         const z = getCurrentZone();
         const isHolo = z && z.kind === "holo";
         const servoPanel = z && z.kind === "servo";
+        const axes = holoAxes(z);
+        const noServo = isHolo && axes.length === 0;
+        // A holo's H or V controls only when it has that servo; none at all for a light-only holo
+        document.querySelectorAll(".servo-ctl").forEach((el) => el.classList.toggle("is-hidden", noServo));
+        $("holoNoServos").classList.toggle("is-hidden", !noServo);
+        $("wrapSliderH").classList.toggle("is-hidden", noServo || (isHolo && !axes.includes("h")));
         const wrap = $("wrapSliderV");
-        if (wrap) wrap.classList.toggle("is-hidden", !isHolo);
+        if (wrap) wrap.classList.toggle("is-hidden", !isHolo || !axes.includes("v"));
+        const oneAxis = isHolo && axes.length === 1;
+        const axSel = $("holoSaveAxis");
+        if (oneAxis) {
+          axSel.value = axes[0];
+          axSel.dataset.forced = "1";
+        } else if (axSel.dataset.forced) {
+          axSel.value = "hv";                          // undo the value forced by a one-servo holo
+          delete axSel.dataset.forced;
+        }
+        document.querySelectorAll(".holo-axis-ctl").forEach((el) => el.classList.toggle("is-hidden", oneAxis));
         const pref = $("labelSliderHPref");
         if (pref) pref.textContent = isHolo ? L("servoHorizontalH") : L("pwmServo");
         if (isHolo) {
-          $("btnSendPos").textContent = L("sendPosHolo");
+          $("btnSendPos").textContent = oneAxis ? L(axes[0] === "h" ? "sendPosHoloH" : "sendPosHoloV") : L("sendPosHolo");
         } else if (servoPanel) {
           $("btnSendPos").textContent = L("sendPosPanel", { panel: getMdPanel2(z) });
         } else {
@@ -893,7 +1387,7 @@
           }
         } catch (_) {}
         try {
-          const json = localStorage.getItem(PWM_RANGE_LS);
+          const json = DROID_STORE.getItem(PWM_RANGE_LS);
           if (json) {
             const o = JSON.parse(json);
             if (o && typeof o === "object") return o;
@@ -914,7 +1408,7 @@
             ";SameSite=Lax";
         } catch (_) {}
         try {
-          localStorage.setItem(PWM_RANGE_LS, json);
+          DROID_STORE.setItem(PWM_RANGE_LS, json);
         } catch (_) {}
       }
 
@@ -1065,8 +1559,12 @@
           return;
         }
 
-        const saveAxis = $("holoSaveAxis").value || "hv";
-        const cmds = buildHoloCommands(mode, z.holoId, h, v, saveAxis);
+        const axes = holoAxes(z);
+        if (!axes.length) return;                      // a light-only holo has no servo to move
+        const saveAxis = axes.length === 1 ? axes[0] : $("holoSaveAxis").value || "hv";
+        let cmds = buildHoloCommands(mode, z.holoId, h, v, saveAxis);
+        // *MHxx / *MVxx: a one-servo holo only gets its own axis
+        if (mode === "test" && axes.length === 1) cmds = cmds.filter((c) => c.charAt(2) === axes[0].toUpperCase());
         if (cmds.length === 0) return;
         try {
           for (const c of cmds) await sendOneLine(c);
@@ -1141,7 +1639,8 @@
       }
 
       function selectZone(index) {
-        if (index < 0) index = R2_BLUEPRINT_ZONES.length - 1;
+        if (!R2_BLUEPRINT_ZONES.length) index = -1;
+        else if (index < 0) index = R2_BLUEPRINT_ZONES.length - 1;
         if (index >= R2_BLUEPRINT_ZONES.length) index = 0;
         if (index !== selectedZoneIndex) {
           const prev = getCurrentZone();
@@ -1159,6 +1658,7 @@
         });
         applyStoredPwmRangeForZone(z);
         updateZoneUi();
+        renderEditor();
       }
 
       function getZoneIndexByClick(xPct, yPct) {
@@ -1221,14 +1721,6 @@
         });
       }
 
-      // What the 3D view (r2view3d.js) needs from the console
-      window.R2Console = {
-        zones: R2_BLUEPRINT_ZONES,
-        selectZone: (i) => selectZone(i),
-        selected: () => selectedZoneIndex,
-        label: (z) => zoneDisplayLabel(z),
-        lang: () => uiLang,
-      };
 
       $("zoneSelect").addEventListener("change", () => {
         selectZone(parseInt($("zoneSelect").value, 10) || 0);
@@ -1298,7 +1790,7 @@
 
       $("uiLang").addEventListener("change", () => {
         uiLang = $("uiLang").value === "es" ? "es" : "en";
-        localStorage.setItem(LANG_KEY, uiLang);
+        try { DROID_STORE.setItem(LANG_KEY, uiLang); } catch (_) {}
         applyUiLanguage();
         window.dispatchEvent(new Event("r2-lang"));      // the 3D view relabels its buttons
         if (window.R2View3D) window.R2View3D.setSelected(selectedZoneIndex);
