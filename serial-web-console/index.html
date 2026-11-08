@@ -323,6 +323,26 @@
     }
     .hotspot:hover .hotspot-label,
     .hotspot.selected .hotspot-label { opacity: 1; }
+    /* First-run guide (modal) */
+    dialog.onb { width: min(44rem, calc(100vw - 2rem)); }
+    .onb-head { display: flex; flex-direction: column; gap: 0.75rem; padding: 1rem 1.25rem 0.75rem; border-bottom: 1px solid var(--border); }
+    .onb-head img { height: 35px; width: auto; align-self: flex-start; }
+    .onb-steps { display: flex; flex-wrap: wrap; gap: 0.35rem; list-style: none; margin: 0; padding: 0; font-size: 0.72rem; }
+    .onb-steps li { padding: 0.15rem 0.55rem; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); }
+    .onb-steps li.active { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+    .onb-steps li.done { border-color: var(--ok); color: var(--ok); }
+    dialog.onb h2 { margin: 0 0 0.4rem; font-size: 1.15rem; }
+    .onb-text { margin: 0 0 1rem; font-size: 0.9rem; }
+    .onb-pane[hidden], .onb [hidden] { display: none; }
+    .onb-choices { display: flex; flex-direction: column; gap: 0.5rem; align-items: stretch; }
+    dialog.onb textarea { margin-bottom: 0.6rem; font-size: 0.8rem; }
+    .onb-summary { margin: 0 0 0.75rem; padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); font-size: 0.85rem; }
+    .onb-summary.bad { border-color: var(--err); }
+    .onb-downloads { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; }
+    .onb-howto { margin: 0 0 0.75rem; padding-left: 1.25rem; font-size: 0.85rem; }
+    .onb-skip { margin: 1rem 0 0; text-align: right; }
+    .onb-skip button { font-size: 0.8rem; padding: 0.3rem 0.7rem; }
+    #toolGuide::before { content: "\f14e"; }
     /* Guided channel walk: a non-modal card (the R2 behind it must stay clickable) */
     dialog.walk-card {
       position: fixed;
@@ -383,6 +403,7 @@
       border-radius: 10px;
       box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
     }
+    dialog.modal a, .walk-card a { color: var(--accent); }
     dialog.modal::backdrop { background: rgba(5, 8, 12, 0.65); }
     .modal-head {
       display: flex;
@@ -545,6 +566,7 @@
 <body>
   <header class="page-header">
     <nav class="tools" aria-label="Tools">
+      <button type="button" class="ic btn-ghost" id="toolGuide" data-i18n="toolGuide">Guide</button>
       <button type="button" class="ic btn-ghost" id="toolFlash" data-i18n="toolFlash">Flash the Mega</button>
       <button type="button" class="ic btn-ghost" id="toolParts" data-i18n="toolParts">Droid parts</button>
       <button type="button" class="ic btn-ghost" id="toolWalk" data-i18n="toolWalk">Channel walk</button>
@@ -623,6 +645,85 @@
       <button type="button" class="ic modal-close" data-close data-i18n-title="dlgClose" aria-label="Close"></button>
     </div>
     <div class="modal-body"><p class="hint" data-i18n-html="routingHint"></p></div>
+  </dialog>
+
+  <dialog class="modal onb" id="onbDialog" aria-labelledby="onbTitle">
+    <div class="onb-head">
+      <img src="astromech-spain.png" width="220" height="35" alt="Astromech Spain" />
+      <ol class="onb-steps" id="onbSteps"></ol>
+    </div>
+    <div class="modal-body">
+      <h2 id="onbTitle"></h2>
+      <p class="onb-text" id="onbText"></p>
+
+      <div class="onb-pane" data-step="welcome">
+        <div class="onb-choices">
+          <button type="button" class="btn-primary" id="onbStartExample" data-i18n="onbStartExample">Start from the example droid</button>
+          <button type="button" class="btn-ghost" id="onbStartEmpty" data-i18n="onbStartEmpty">Start empty</button>
+          <button type="button" class="btn-ghost" id="onbStartImport" data-i18n="onbStartImport">Import my configuration file</button>
+          <button type="button" class="btn-ok" id="onbStartKeep" data-i18n="onbStartKeep" hidden>Keep the parts I already have</button>
+        </div>
+      </div>
+
+      <div class="onb-pane" data-step="sketch">
+        <textarea id="onbIno" rows="6" data-i18n-placeholder="onbInoPlaceholder" placeholder="Paste your sketch here"></textarea>
+        <input type="file" id="onbFiles" accept=".ino,.h,.cpp,.txt" multiple hidden />
+        <div class="row">
+          <button type="button" class="btn-ghost" id="onbLoadFiles" data-i18n="onbLoadFiles">Load sketch files…</button>
+          <button type="button" class="btn-primary" id="onbAnalyze" data-i18n="onbAnalyze">Read the sketch</button>
+        </div>
+        <p class="onb-summary" id="onbSummary" hidden></p>
+        <div class="row">
+          <button type="button" class="btn-primary" id="onbSketchNext" data-i18n="onbNext" disabled>Continue</button>
+          <button type="button" class="btn-ghost" id="onbSketchSkip" data-i18n="onbSketchSkip">I don't have the sketch at hand</button>
+        </div>
+      </div>
+
+      <div class="onb-pane" data-step="patch">
+        <p class="onb-summary" id="onbPatchMsg"></p>
+        <div class="onb-downloads" id="onbPatchFiles"></div>
+        <ol class="onb-howto">
+          <li data-i18n-html="onbPatchHow1"></li>
+          <li data-i18n-html="onbPatchHow2"></li>
+          <li data-i18n-html="onbPatchHow3"></li>
+        </ol>
+        <p class="hint" data-i18n-html="onbPatchGuide"></p>
+        <div class="row">
+          <button type="button" class="btn-primary" id="onbPatchNext" data-i18n="onbNext">Continue</button>
+          <button type="button" class="btn-ghost" id="onbPatchBack" data-i18n="onbBack" hidden>Back to the sketch</button>
+        </div>
+      </div>
+
+      <div class="onb-pane" data-step="flash">
+        <div class="row">
+          <button type="button" class="btn-primary" id="onbOpenFlash" data-i18n="onbOpenFlash">Open the flash window</button>
+          <button type="button" class="btn-ghost" id="onbFlashSkip" data-i18n="onbFlashSkip">I uploaded it with the Arduino IDE</button>
+        </div>
+      </div>
+
+      <div class="onb-pane" data-step="connect">
+        <div class="row"><button type="button" class="btn-primary" id="onbConnect" data-i18n="onbConnect">Connect and test</button></div>
+        <p class="onb-summary" id="onbConnectMsg" hidden></p>
+      </div>
+
+      <div class="onb-pane" data-step="walk">
+        <div class="row">
+          <button type="button" class="btn-primary" id="onbWalkDome" data-i18n="onbWalkDome">Walk the dome</button>
+          <button type="button" class="btn-ghost" id="onbWalkBody" data-i18n="onbWalkBody">Walk the body</button>
+        </div>
+        <p class="onb-summary" id="onbWalkMsg" hidden></p>
+        <div class="row"><button type="button" class="btn-primary" id="onbWalkNext" data-i18n="onbNext">Continue</button></div>
+      </div>
+
+      <div class="onb-pane" data-step="done">
+        <div class="row">
+          <button type="button" class="btn-ok" id="onbExport" data-i18n="onbExport">Export my configuration</button>
+          <button type="button" class="btn-primary" id="onbClose" data-i18n="onbClose">Close</button>
+        </div>
+      </div>
+
+      <p class="onb-skip"><button type="button" class="btn-ghost" id="onbSkip" data-i18n="onbSkip">Skip the guide</button></p>
+    </div>
   </dialog>
 
   <dialog class="walk-card" id="walkDialog" aria-labelledby="walkTitleH">
@@ -803,6 +904,9 @@
   <script src="lib/stk500v2.js"></script>
   <script src="lib/webserial-transport.js"></script>
   <script src="lib/channel-walk.js"></script>
+  <script src="lib/ino-detect.js"></script>
+  <script src="lib/ino-patch.js"></script>
+  <script src="lib/onboarding.js"></script>
   <script>
     /**
      * ShadowMD: body → prefijo S3:, dome/holos → S1: (ver combo serialTarget / inferSerialTargetFromZone).
@@ -825,6 +929,15 @@
       }
     })();
     /** The droid configuration in use (markers); R2_BLUEPRINT_ZONES is computed from it. */
+    // Anything already set up in this browser (parts, PWM ranges, 3D positions)? Then the
+    // first-run guide does not open by itself.
+    const HAD_SAVED_SETUP = ["shadowmd_droid_config_v1", "shadowmd_pwm_ranges_json", "shadowmd_r2_3d_markers"].some((k) => {
+      try {
+        return DROID_STORE.getItem(k) != null;
+      } catch (_) {
+        return false;
+      }
+    });
     let droidConfig = DroidConfig.loadConfig(DROID_STORE) || DroidConfig.exampleConfig();
     let R2_BLUEPRINT_ZONES = DroidConfig.toZones(droidConfig);
 
@@ -1592,6 +1705,7 @@
           });
           flash.progressKey = null;
           flash.msg = { cls: "ok", lines: [["flashDone", { kb: kb(hex.size) }]] };
+          setTimeout(() => window.dispatchEvent(new Event("r2-flash-done")), 0);
         } catch (e) {
           flash.failedPhase = FLASH_PHASES.indexOf(flash.phase) >= 0 ? flash.phase : null;
           flash.progressKey = null;
@@ -1773,6 +1887,7 @@
         msg.hidden = false;
         msg.classList.add("placed");
         msg.textContent = L("walkDone", { n: walk.count });
+        window.dispatchEvent(new Event("r2-walk-end"));
       }
 
       function walkClose() {
@@ -1837,6 +1952,278 @@
       window.addEventListener("r2-lang", () => {
         if (walk.on) walkRender();
       });
+
+      // ------------------------------------------------------------ first-run guided setup
+      // welcome → sketch → (patch → flash →) connect → walk → done. The steps and their order live
+      // in lib/onboarding.js; this is only the cards. It opens by itself the first time (nothing
+      // saved in this browser yet); "Guide" in the header opens it again at the saved step.
+      const CLASSIC_GUIDE_URL = "https://github.com/BeskarCode/SHADOW_MD_EEBEL/blob/pc-forwarding/docs/web-console.md";
+      const ONB_STORE = DROID_STORE;
+      const onb = { state: Onboarding.loadState(ONB_STORE), files: null, pinging: false, walked: {} };
+
+      function onbSave() {
+        Onboarding.saveState(ONB_STORE, onb.state);
+      }
+
+      function onbGo(input) {
+        onb.state = Onboarding.next(onb.state, input);
+        onbSave();
+        onbRender();
+      }
+
+      function downloadText(name, text) {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          URL.revokeObjectURL(a.href);
+          a.remove();
+        }, 1000);
+      }
+
+      /** The sketch in plain words, e.g. "Classic Shadow MD · MarcDuinos at 9600 · no USB forwarding: we'll add it". */
+      function onbSketchSummary(d) {
+        if (!d || d.variant === "unknown") return L("onbVarUnknown");
+        const parts = [L(d.variant === "lite" ? "onbVarLite" : "onbVarClassic")];
+        if (d.marcDuinoBaud) parts.push(L("onbBaud", { baud: d.marcDuinoBaud }));
+        if (d.variant === "classic") parts.push(L(d.forwarding ? "onbFwdYes" : "onbFwdNo"));
+        else parts.push(L(d.forwarding ? "onbFwdYes" : "onbFwdLiteOff"));
+        if (d.ros2d2) parts.push("ROS2D2");
+        if (d.buttons && d.buttons.length) parts.push(L("onbButtons", { n: d.buttons.length }));
+        return parts.join(" · ");
+      }
+
+      function onbRenderPatch() {
+        const box = $("onbPatchFiles");
+        box.innerHTML = "";
+        const msg = $("onbPatchMsg");
+        $("onbPatchBack").hidden = !!onb.files;
+        if (!onb.files) {
+          msg.textContent = L("onbPatchNoFiles");
+          return;
+        }
+        const r = InoPatch.patchClassic(onb.files);
+        if (!r.ok) {
+          msg.textContent = L(r.reason === "already-patched" ? "onbPatchAlready" : "onbPatchFail", { where: r.where || "" });
+          return;
+        }
+        msg.textContent = L("onbPatchOk");
+        // only the tabs that changed, plus PcForwarding.h (patchClassic always lists it)
+        r.files.filter((f) => r.changed.indexOf(f.name) >= 0).forEach((f) => {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.className = "btn-ghost";
+          b.textContent = L("onbDownload", { name: f.name });
+          b.addEventListener("click", () => downloadText(f.name, f.text));
+          box.appendChild(b);
+        });
+      }
+
+      function onbRender() {
+        const s = onb.state;
+        const steps = $("onbSteps");
+        steps.innerHTML = "";
+        const cur = Onboarding.STEPS.indexOf(s.step);
+        Onboarding.STEPS.forEach((st, i) => {
+          const li = document.createElement("li");
+          li.textContent = L("onbStep_" + st);
+          li.classList.toggle("done", i < cur);
+          li.classList.toggle("active", i === cur);
+          steps.appendChild(li);
+        });
+        $("onbTitle").textContent = L("onbT_" + s.step);
+        $("onbText").innerHTML = L("onbX_" + s.step);
+        document.querySelectorAll("#onbDialog .onb-pane").forEach((p) => {
+          p.hidden = p.getAttribute("data-step") !== s.step;
+        });
+        if (s.step === "patch") onbRenderPatch();
+        if (s.step === "sketch") {
+          const sum = $("onbSummary");
+          sum.hidden = !s.detect;
+          if (s.detect) sum.textContent = onbSketchSummary(s.detect);
+        }
+        if (s.step === "walk") {
+          const w = $("onbWalkMsg");
+          const done = Object.keys(onb.walked).map((b) => L(b === "S3:" ? "walkBody" : "walkDome"));
+          w.hidden = !done.length;
+          w.textContent = L("onbWalked", { list: done.join(", ") });
+        }
+      }
+
+      function onbOpen() {
+        onbRender();
+        if (!$("onbDialog").open) $("onbDialog").showModal();
+      }
+
+      function onbHide() {
+        if ($("onbDialog").open) $("onbDialog").close();
+      }
+
+      window.openGuide = onbOpen;
+
+      // ---- welcome. With parts already saved, "example" and "empty" ask for a second click
+      // (they replace them); "keep my parts" goes on without touching anything.
+      function onbStartReplacing(btn, cfg, start) {
+        if (HAD_SAVED_SETUP && btn.dataset.armed !== "1") {
+          btn.dataset.armed = "1";
+          btn.textContent = L("onbConfirmReplace");
+          return;
+        }
+        delete btn.dataset.armed;
+        setConfig(cfg);
+        onbGo({ start });
+      }
+      $("onbStartExample").addEventListener("click", (e) => onbStartReplacing(e.currentTarget, DroidConfig.exampleConfig(), "example"));
+      $("onbStartEmpty").addEventListener("click", (e) => onbStartReplacing(e.currentTarget, DroidConfig.emptyConfig(), "empty"));
+      $("onbStartKeep").addEventListener("click", () => onbGo({ start: "example" }));
+      $("onbStartKeep").hidden = !HAD_SAVED_SETUP;
+      $("onbStartImport").addEventListener("click", () => {
+        $("edImportFile").value = "";
+        $("edImportFile").click();
+        onbGo({ start: "import" });
+      });
+
+      // ---- sketch
+      $("onbLoadFiles").addEventListener("click", () => {
+        $("onbFiles").value = "";
+        $("onbFiles").click();
+      });
+      async function onbAnalyze(files) {
+        onb.files = files;
+        const d = InoDetect.detectSketch(files);
+        onb.state = Object.assign({}, onb.state, { detect: d });
+        onbSave();
+        $("onbSketchNext").disabled = false;
+        onbRender();
+      }
+      $("onbFiles").addEventListener("change", async () => {
+        const list = Array.from($("onbFiles").files || []);
+        if (!list.length) return;
+        const files = await Promise.all(list.map(async (f) => ({ name: f.name, text: await f.text() })));
+        $("onbIno").value = "";
+        onbAnalyze(files);
+      });
+      $("onbAnalyze").addEventListener("click", () => {
+        const text = $("onbIno").value;
+        if (!text.trim()) return;
+        onbAnalyze([{ name: "sketch.ino", text }]);
+      });
+      $("onbSketchNext").addEventListener("click", () => {
+        if (onb.state.detect) onbGo({ detect: onb.state.detect });
+      });
+      $("onbSketchSkip").addEventListener("click", () => onbGo({ skip: true }));
+
+      // ---- patch, flash
+      $("onbPatchNext").addEventListener("click", () => onbGo({}));
+      // the sketch files are not saved: after a reload they are loaded again from the sketch step
+      $("onbPatchBack").addEventListener("click", () => {
+        onb.state = Object.assign({}, onb.state, { step: "sketch" });
+        onbSave();
+        onbRender();
+      });
+      $("onbOpenFlash").addEventListener("click", () => {
+        renderFlash();
+        $("flashDialog").showModal();
+      });
+      $("onbFlashSkip").addEventListener("click", () => onbGo({ skip: true }));
+      window.addEventListener("r2-flash-done", () => {
+        if (onb.state.step === "flash") onbGo({ flashed: true });
+      });
+
+      // ---- connect: 115200, then PING until PONG (the Mega restarts when the port opens and
+      // takes a few seconds to start, so it keeps asking for up to 12 s)
+      $("onbConnect").addEventListener("click", async () => {
+        if (onb.pinging) return;
+        const msg = $("onbConnectMsg");
+        msg.hidden = false;
+        msg.classList.remove("bad");
+        msg.textContent = L("onbConnecting");
+        const want = 115200;
+        $("baud").value = String(want);
+        try {
+          if (serialConnected && parseInt($("baud").dataset.openBaud || "0", 10) !== want) {
+            const p = port;
+            await closePort();
+            await openConsoleOn(p, want);
+          } else if (!serialConnected) {
+            await openPort();
+          }
+        } catch (e) {
+          msg.textContent = "Error: " + (e.message || e);
+        }
+        if (!serialConnected) {
+          msg.classList.add("bad");
+          msg.textContent = L("onbNoPort");
+          return;
+        }
+        onb.pinging = true;
+        let heard = "";
+        const listen = (t) => {
+          heard += t;
+        };
+        serialTextListeners.add(listen);
+        const t0 = Date.now();
+        let pong = false;
+        while (Date.now() - t0 < 12000) {
+          try {
+            await sendOneLine("PING");
+          } catch (_) {}
+          await new Promise((r) => setTimeout(r, 1500));
+          if (/PONG/.test(heard)) {
+            pong = true;
+            break;
+          }
+        }
+        serialTextListeners.delete(listen);
+        onb.pinging = false;
+        if (pong) {
+          msg.textContent = L("onbPong");
+          onbGo({ pong: true });
+        } else {
+          msg.classList.add("bad");
+          msg.innerHTML = L("onbNoPong");
+        }
+      });
+
+      // ---- walk: the guide steps aside so R2 can be clicked, and comes back when the walk ends
+      function onbWalk(board) {
+        if (!serialConnected) {
+          const w = $("onbWalkMsg");
+          w.hidden = false;
+          w.textContent = L("walkNeedSerial");
+          return;
+        }
+        onb.walking = board;
+        onbHide();
+        window.startChannelWalk({ board, from: 1, to: 13 });
+      }
+      $("onbWalkDome").addEventListener("click", () => onbWalk("S1:"));
+      $("onbWalkBody").addEventListener("click", () => onbWalk("S3:"));
+      window.addEventListener("r2-walk-end", () => {
+        if (!onb.walking) return;
+        onb.walked[onb.walking] = true;
+        onb.walking = null;
+        if (onb.state.step === "walk") onbOpen();
+      });
+      $("onbWalkNext").addEventListener("click", () => onbGo({}));
+
+      // ---- done, skip, reopen
+      $("onbExport").addEventListener("click", () => $("edExport").click());
+      $("onbClose").addEventListener("click", () => onbHide());
+      $("onbSkip").addEventListener("click", () => {
+        onb.state = Object.assign({}, onb.state, { skipped: true });
+        onbSave();
+        onbHide();
+      });
+      $("toolGuide").addEventListener("click", () => onbOpen());
+      window.addEventListener("r2-lang", () => {
+        if ($("onbDialog").open) onbRender();
+      });
+
+      if (Onboarding.shouldAutoOpen(onb.state, HAD_SAVED_SETUP)) onbOpen();
+
 
       $("flashCancel").addEventListener("click", () => {
         if (!flashBusy) {
@@ -1978,6 +2365,9 @@
         statusEl.classList.add("error");
       }
 
+      /** Functions that get every piece of text the Mega sends (the guide waits for PONG). */
+      const serialTextListeners = new Set();
+
       async function readLoop() {
         readLoopAbort = false;
         const decoder = new TextDecoder();
@@ -1992,7 +2382,13 @@
               break;
             }
             if (value && value.length) {
-              appendLog("← ", decoder.decode(value, { stream: true }));
+              const text = decoder.decode(value, { stream: true });
+              appendLog("← ", text);
+              serialTextListeners.forEach((f) => {
+                try {
+                  f(text);
+                } catch (_) {}
+              });
             }
           }
         } catch (e) {
@@ -2013,6 +2409,7 @@
       async function openConsoleOn(p, baud) {
         await p.open({ baudRate: baud });
         port = p;
+        $("baud").dataset.openBaud = String(baud);
         const enc = new TextEncoderStream();
         pipeDone = enc.readable.pipeTo(p.writable).catch(() => {});
         writer = enc.writable.getWriter();
