@@ -58,6 +58,7 @@
   const t = (k) => (TXT[(window.R2Console && window.R2Console.lang()) || "en"] || TXT.en)[k];
 
   let renderer, scene, camera, controls, root, dome, markers = [], selected = -1, moving = false;
+  let pickCb = null; // one-shot "where did the user click on R2" (guided channel walk)
   let angle = 0, speed = 0, speedAt = 0, failed = false;
 
   // ------------------------------------------------------------------ model and dome cut
@@ -420,21 +421,34 @@
     return ray.intersectObjects(objects, false)[0];
   }
 
+  /** Where a click on the droid lands, in the frame the marker lives in (dome turns with it). */
+  function spotOf(hit, droid) {
+    const n = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld) : new THREE.Vector3();
+    const p = hit.point.addScaledVector(n, 0.04);
+    const part = droid.top.includes(hit.object) ? "dome" : "body";
+    const local = part === "dome" ? droid.dome.worldToLocal(p) : root.worldToLocal(p);
+    return { pos3d: local.toArray().map((x) => +x.toFixed(4)), part };
+  }
+
   function click(e) {
     const droid = window.__r2droid;
     if (!droid) return;
+    if (pickCb) {
+      const hit = pick(e, droid.body.concat(droid.top));
+      if (!hit) return;
+      const cb = pickCb;
+      pickCb = null;
+      renderer.domElement.style.cursor = "";
+      cb(spotOf(hit, droid));
+      return;
+    }
     if (moving && selected >= 0) {
       const hit = pick(e, droid.body.concat(droid.top));
       if (!hit) return;
       const zone = window.R2Console.zones[selected];
       if (!zone) { setMoving(false); return; }
-      const n = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld) : new THREE.Vector3();
-      const p = hit.point.addScaledVector(n, 0.04);
-      // A marker on the dome turns with it, so it lives in the dome's frame
-      const part = droid.top.includes(hit.object) ? "dome" : "body";
-      const local = part === "dome" ? droid.dome.worldToLocal(p) : root.worldToLocal(p);
       setMoving(false);
-      window.R2Console.updateMarker(zone.id, { pos3d: local.toArray().map((x) => +x.toFixed(4)), part });
+      window.R2Console.updateMarker(zone.id, spotOf(hit, droid));
       return;
     }
     const hit = pick(e, markers);
@@ -542,7 +556,14 @@
   // Whether the 3D view is in use (false in the 2D blueprint fallback, without WebGL)
   const is3d = () => !failed && !!renderer;
 
-  window.R2View3D = { setSelected, onCommand, rebuild, place, is3d };
+  /** The next click on the droid calls cb({ pos3d, part }) instead of selecting; null cancels. */
+  function pickPoint(cb) {
+    pickCb = typeof cb === "function" ? cb : null;
+    if (pickCb) setMoving(false);
+    if (renderer) renderer.domElement.style.cursor = pickCb ? "crosshair" : "";
+  }
+
+  window.R2View3D = { setSelected, onCommand, rebuild, place, is3d, pickPoint };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
 })();

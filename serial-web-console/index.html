@@ -323,6 +323,38 @@
     }
     .hotspot:hover .hotspot-label,
     .hotspot.selected .hotspot-label { opacity: 1; }
+    /* Guided channel walk: a non-modal card (the R2 behind it must stay clickable) */
+    dialog.walk-card {
+      position: fixed;
+      inset: auto auto 1rem 1rem;
+      margin: 0;
+      width: min(24rem, calc(100vw - 2rem));
+      max-height: calc(100vh - 2rem);
+      overflow-y: auto;
+      padding: 0;
+      z-index: 50;
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--accent);
+      border-radius: 10px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+    }
+    .walk-card [hidden] { display: none; }
+    .walk-card .grid3 { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 0.5rem; align-items: end; margin-bottom: 0.75rem; }
+    .walk-card .grid3 > div { display: flex; flex-direction: column; min-width: 0; }
+    .walk-card input[type="number"] { width: 100%; }
+    .walk-ch { font-size: 1.15rem; font-weight: 600; margin: 0 0 0.25rem; }
+    .walk-has { margin: 0 0 0.5rem; color: var(--muted); font-size: 0.85rem; }
+    .walk-look { margin: 0 0 0.75rem; font-size: 0.85rem; }
+    .walk-look.placed { color: var(--ok); }
+    .walk-name { display: flex; flex-direction: column; margin-bottom: 0.75rem; }
+    .walk-name input { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 0.6rem; font-size: 0.95rem; }
+    .walk-card .row button { padding: 0.4rem 0.75rem; font-size: 0.85rem; }
+    #toolWalk::before, #walkTitleH::before { content: "\f54b"; }
+    #walkStart::before { content: "\f04b"; }
+    #walkRepeat::before { content: "\f2f9"; }
+    #walkNext::before { content: "\f04e"; }
+    #walkFinish::before { content: "\f11e"; }
     /* Which firmware the console needs, with links to the guides */
     .compat-note {
       flex-shrink: 0;
@@ -515,6 +547,7 @@
     <nav class="tools" aria-label="Tools">
       <button type="button" class="ic btn-ghost" id="toolFlash" data-i18n="toolFlash">Flash the Mega</button>
       <button type="button" class="ic btn-ghost" id="toolParts" data-i18n="toolParts">Droid parts</button>
+      <button type="button" class="ic btn-ghost" id="toolWalk" data-i18n="toolWalk">Channel walk</button>
       <button type="button" class="ic btn-ghost" id="toolRouting" data-i18n="toolRouting">Command routing</button>
     </nav>
     <div class="titles">
@@ -590,6 +623,40 @@
       <button type="button" class="ic modal-close" data-close data-i18n-title="dlgClose" aria-label="Close"></button>
     </div>
     <div class="modal-body"><p class="hint" data-i18n-html="routingHint"></p></div>
+  </dialog>
+
+  <dialog class="walk-card" id="walkDialog" aria-labelledby="walkTitleH">
+    <div class="modal-head">
+      <h2 class="ic" id="walkTitleH" data-i18n="walkTitle">Channel walk</h2>
+      <button type="button" class="ic modal-close" id="walkClose" data-i18n-title="dlgClose" aria-label="Close"></button>
+    </div>
+    <div class="modal-body">
+      <div id="walkSetup">
+        <p class="hint" data-i18n="walkIntro">The console opens and closes each channel of a board, one at a time. Watch the droid and click on R2 where the part that moved is.</p>
+        <div class="grid3">
+          <div><label for="walkBoard" data-i18n="walkBoard">Board</label>
+            <select id="walkBoard"><option value="S1:" data-i18n="walkDome">Dome (S1:)</option><option value="S3:" data-i18n="walkBody">Body (S3:)</option></select></div>
+          <div><label for="walkFrom" data-i18n="walkFrom">From</label><input type="number" id="walkFrom" min="1" max="99" value="1" /></div>
+          <div><label for="walkTo" data-i18n="walkTo">To</label><input type="number" id="walkTo" min="1" max="99" value="13" /></div>
+        </div>
+        <p class="walk-look" id="walkSetupMsg" hidden></p>
+        <div class="row"><button type="button" class="ic btn-primary" id="walkStart" data-i18n="walkStart">Start</button></div>
+      </div>
+      <div id="walkRun" hidden>
+        <p class="walk-ch" id="walkCh"></p>
+        <p class="walk-has" id="walkHas"></p>
+        <p class="walk-look" id="walkLook"></p>
+        <div class="walk-name" id="walkNameBox" hidden>
+          <label for="walkName" data-i18n="walkName">Name of this part</label>
+          <input type="text" id="walkName" maxlength="40" />
+        </div>
+        <div class="row">
+          <button type="button" class="ic btn-ghost" id="walkRepeat" data-i18n="walkRepeat">Move again</button>
+          <button type="button" class="ic btn-primary" id="walkNext" data-i18n="walkNothing">Nothing here</button>
+          <button type="button" class="ic btn-ghost" id="walkFinish" data-i18n="walkFinish">Finish</button>
+        </div>
+      </div>
+    </div>
   </dialog>
 
   <dialog class="modal" id="flashDialog" aria-labelledby="flashTitleH">
@@ -735,6 +802,7 @@
   <script src="lib/intel-hex.js"></script>
   <script src="lib/stk500v2.js"></script>
   <script src="lib/webserial-transport.js"></script>
+  <script src="lib/channel-walk.js"></script>
   <script>
     /**
      * ShadowMD: body → prefijo S3:, dome/holos → S1: (ver combo serialTarget / inferSerialTargetFromZone).
@@ -959,8 +1027,11 @@
         return commitConfig(cfg, id);
       }
 
-      /** A new servo (body, first free channel) or holo (axes H and V); returns its id, or null. */
-      function addMarker(kind) {
+      /**
+       * A new servo (body, first free channel) or holo (axes H and V); returns its id, or null.
+       * `init` (optional) overrides the defaults, e.g. { board, channel, name, nameEs, pos3d, part }.
+       */
+      function addMarker(kind, init) {
         const cfg = cloneConfig(droidConfig);
         const id = DroidConfig.newMarkerId(cfg);
         let m;
@@ -973,6 +1044,7 @@
           if (!channel) return null;
           m = { id, name: STR.en.newPart, nameEs: STR.es.newPart, kind: "servo", board: "S3:", channel };
         }
+        if (init) Object.assign(m, init, { id, kind: m.kind });
         cfg.markers.push(m);
         // Ids are reused (m1, m2…): a new part must not inherit a range left by an old one
         const map = readPwmRangesMap();
@@ -1177,9 +1249,13 @@
         const z = getCurrentZone();
         setPlacing2d(false);
         if (!z) return;
+        updateMarker(z.id, { map2d: [spot2d(xPct, yPct)] });
+      }
+
+      /** A marker's 2D spot around a blueprint click, in % like the existing ones. */
+      function spot2d(xPct, yPct) {
         const r2 = (v) => Math.round(v * 100) / 100;
-        const spot = { left: r2(xPct - 1.6), top: r2(yPct - 1.6), w: 3.2, h: 3.2 };
-        updateMarker(z.id, { map2d: [spot] });
+        return { left: r2(xPct - 1.6), top: r2(yPct - 1.6), w: 3.2, h: 3.2 };
       }
 
       $("edMove").addEventListener("click", () => {
@@ -1583,6 +1659,185 @@
         showEditor(true);
         $("markerEditor").scrollIntoView({ behavior: "smooth", block: "nearest" });
       });
+
+      // ------------------------------------------------------------ guided channel walk
+      // Channel by channel: open, then close 1.5 s later; the user clicks on R2 where the part
+      // that moved is (moves its marker, or creates "Dome 07" / "Body 07"), or says "nothing here".
+      // Only panel servos (:OP/:CL); holos are added by hand in the part editor.
+      const walk = { on: false, board: "S1:", n: 0, to: 13, placedId: null, count: 0, timer: null, pick2d: false };
+
+      function walkArmPick() {
+        if (has3d()) window.R2View3D.pickPoint(walkSpot);
+        else {
+          walk.pick2d = true;
+          $("blueprintStage").style.cursor = "crosshair";
+        }
+      }
+
+      function walkDisarm() {
+        if (window.R2View3D && window.R2View3D.pickPoint) window.R2View3D.pickPoint(null);
+        walk.pick2d = false;
+        $("blueprintStage").style.cursor = "";
+        clearTimeout(walk.timer);
+      }
+
+      async function walkMove() {
+        clearTimeout(walk.timer);
+        if (!serialConnected) {
+          $("walkLook").textContent = L("walkNeedSerial");
+          return;
+        }
+        const c = ChannelWalk.walkCommands(walk.board, walk.n);
+        try {
+          await sendOneLine(c.open);
+          walk.timer = setTimeout(() => sendOneLine(c.close).catch(() => {}), 1500);
+        } catch (e) {
+          appendLog("! ", L("logSendErr") + (e.message || e));
+        }
+      }
+
+      function walkZoneIndex(id) {
+        return R2_BLUEPRINT_ZONES.findIndex((z) => z.id === id);
+      }
+
+      function walkRender() {
+        const ch = ChannelWalk.channelStr(walk.n);
+        const boardName = L(walk.board === "S3:" ? "walkBody" : "walkDome");
+        $("walkCh").textContent = L("walkChannel", { board: boardName, ch, to: ChannelWalk.channelStr(walk.to) });
+        const m = ChannelWalk.findServo(droidConfig, walk.board, walk.n);
+        $("walkHas").textContent = m ? L("walkHas", { name: uiLang === "es" ? m.nameEs || m.name : m.name }) : L("walkNone");
+        const placed = !!walk.placedId;
+        const look = $("walkLook");
+        look.classList.toggle("placed", placed);
+        look.textContent = placed ? L("walkPlaced") : L("walkLook", { ch });
+        $("walkNameBox").hidden = !placed;
+        $("walkNext").textContent = L(placed ? "walkNext" : "walkNothing");
+      }
+
+      function walkEnter(n) {
+        walkDisarm();
+        if (n > walk.to) return walkEnd();
+        walk.n = n;
+        walk.placedId = null;
+        const m = ChannelWalk.findServo(droidConfig, walk.board, n);
+        if (m) {
+          const i = walkZoneIndex(m.id);
+          if (i >= 0) selectZone(i);
+        }
+        walkRender();
+        walkArmPick();
+        walkMove();
+      }
+
+      /** Click on R2 for this channel: move its marker, or create one; then let the user name it. */
+      function walkSpot(spot) {
+        let m = ChannelWalk.findServo(droidConfig, walk.board, walk.n);
+        let id = m ? m.id : null;
+        if (m) {
+          if (!updateMarker(m.id, spot).ok) id = null;
+        } else {
+          const nm = ChannelWalk.defaultName(walk.board, walk.n);
+          id = addMarker("servo", Object.assign({ board: walk.board, channel: ChannelWalk.channelStr(walk.n) }, nm, spot));
+        }
+        if (id) {
+          if (walk.placedId !== id) walk.count++;
+          walk.placedId = id;
+          const i = walkZoneIndex(id);
+          if (i >= 0) selectZone(i);
+          m = findMarker(id);
+          $("walkName").value = m ? (uiLang === "es" ? m.nameEs || m.name : m.name) : "";
+        }
+        walkRender();
+        walkArmPick(); // another click moves it again
+        if (id) $("walkName").focus();
+      }
+
+      function walkSaveName() {
+        const id = walk.placedId;
+        const m = id && findMarker(id);
+        const v = $("walkName").value.trim();
+        if (!m || !v) return;
+        const dflt = ChannelWalk.defaultName(walk.board, walk.n).name;
+        // a part still named by default gets the name in both languages; otherwise only this language
+        const isDefault = m.name === dflt && (m.nameEs || dflt) === dflt;
+        const patch = isDefault ? { name: v, nameEs: v } : uiLang === "es" ? { nameEs: v } : { name: v };
+        updateMarker(id, patch);
+      }
+
+      function walkEnd() {
+        walkDisarm();
+        walk.on = false;
+        $("walkRun").hidden = true;
+        $("walkSetup").hidden = false;
+        const msg = $("walkSetupMsg");
+        msg.hidden = false;
+        msg.classList.add("placed");
+        msg.textContent = L("walkDone", { n: walk.count });
+      }
+
+      function walkClose() {
+        if (walk.on) walkSaveName();
+        walkDisarm();
+        walk.on = false;
+        $("walkDialog").close();
+      }
+
+      /** Starts the walk: board "S1:" (dome) or "S3:" (body), channels from..to (to: 13 by default, up to 99). */
+      window.startChannelWalk = function startChannelWalk(opts) {
+        const o = opts || {};
+        const r = ChannelWalk.normalizeRange(o.from, o.to);
+        walk.on = true;
+        walk.board = o.board === "S3:" ? "S3:" : "S1:";
+        walk.to = r.to;
+        walk.count = 0;
+        $("walkSetup").hidden = true;
+        $("walkRun").hidden = false;
+        if (!$("walkDialog").open) $("walkDialog").show();
+        walkEnter(r.from);
+      };
+
+      $("toolWalk").addEventListener("click", () => {
+        if (walk.on) return;
+        $("walkSetup").hidden = false;
+        $("walkRun").hidden = true;
+        $("walkSetupMsg").hidden = true;
+        $("walkDialog").show();
+      });
+      $("walkStart").addEventListener("click", () => {
+        if (!serialConnected) {
+          const msg = $("walkSetupMsg");
+          msg.hidden = false;
+          msg.classList.remove("placed");
+          msg.textContent = L("walkNeedSerial");
+          return;
+        }
+        window.startChannelWalk({ board: $("walkBoard").value, from: $("walkFrom").value, to: $("walkTo").value });
+      });
+      $("walkRepeat").addEventListener("click", () => walkMove());
+      $("walkNext").addEventListener("click", () => {
+        walkSaveName();
+        walkEnter(walk.n + 1);
+      });
+      $("walkFinish").addEventListener("click", () => {
+        walkSaveName();
+        walkEnd();
+      });
+      $("walkName").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          walkSaveName();
+          walkEnter(walk.n + 1);
+        }
+      });
+      $("walkName").addEventListener("change", () => walkSaveName());
+      $("walkClose").addEventListener("click", () => walkClose());
+      $("walkDialog").addEventListener("cancel", (e) => {
+        e.preventDefault();
+        walkClose();
+      });
+      window.addEventListener("r2-lang", () => {
+        if (walk.on) walkRender();
+      });
+
       $("flashCancel").addEventListener("click", () => {
         if (!flashBusy) {
           chooseHexFile(null); // forget the file
@@ -2277,6 +2532,10 @@
         const yPx = e.clientY - rect.top;
         const xPct = (xPx / rect.width) * 100;
         const yPct = (yPx / rect.height) * 100;
+        if (walk.pick2d) {
+          walkSpot({ map2d: [spot2d(xPct, yPct)] });
+          return;
+        }
         if (placing2d) {
           placeOn2d(xPct, yPct);
           return;
