@@ -72,6 +72,16 @@ test("ROS2D2 and the known add-ons of Fernando's sketch carry over", () => {
   assert.deepEqual(r.report.edits, []);
 });
 
+test("Vint43's SHADOW_MD migrates cleanly and the header names it", () => {
+  const r = M.migrate(readDir("classic-vint43"), undefined, { now: NOW });
+  assert.equal(r.ok, true);
+  assert.equal(r.report.variant, "vint43");
+  assert.deepEqual(r.report.edits, []);
+  assert.deepEqual(r.report.warnings, []);
+  assert.match(r.ino.split("\n")[0], /classic Shadow MD \(Vint43\)/);
+  assert.match(M.migrate(stockFiles(), undefined, { now: NOW }).ino.split("\n")[0], /classic Shadow MD \(Eebel\)/);
+});
+
 test("debug output off in the classic sketch is off in Lite", () => {
   const files = withEdits(stockFiles(), [[/^#define SHADOW_VERBOSE\b.*$/m, "//#define SHADOW_VERBOSE"]]);
   const r = M.migrate(files, undefined, { now: NOW });
