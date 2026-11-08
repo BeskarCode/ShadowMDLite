@@ -6,6 +6,8 @@
 
 `ShadowMDLite` is a cleaned‑up, modernized version of the classic **Shadow MD** sketch for Arduino Mega ADK, designed to be easier to maintain and to work smoothly with **BetterDuino** firmware and **AstropixelsPlus** logic effects.
 
+**ShadowMD Lite is a fork of the original Shadow MD**, and it would not exist without the people who built that work and shared it with the community. Thanks to **Vint43**, for SHADOW MD, the sketch this one starts from; **KnightShade**, for the original SHADOW sketch, built on DanF's Padawan; **Eebel**, whose version of Shadow MD (macro sequences, dome automation, disco modes, playlist control) lives on here; and **RealNobser**, for BetterDuino and for the ShadowMD repository this fork comes from.
+
 This document explains what changed, why, and how to adapt the configuration.
 
 ### What it is — and what it is not
