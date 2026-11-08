@@ -5,15 +5,15 @@
  *   the model. Click one to select it, exactly like the blueprint hotspots.
  * - The selected zone glows and shows its name.
  * - The dome turns with the dome speed commands sent (DM:<speed>, ROS:DOME:<speed>).
- * - "Move marker": click on the model to put the selected zone's marker there (saved in
- *   this browser; "Export" copies them all to paste into ZONE_3D below).
+ * - "Move marker": click on the model to put the selected zone's marker there (saved as the
+ *   marker's pos3d in the droid configuration, through window.R2Console.updateMarker).
  *
  * Plain script (no modules) on three.js r147: the console is opened as a local file, and
  * browsers refuse modules and separate model files there. The model is embedded in
  * vendor/r2d2-model.js.
  *
- * Talks to the console through window.R2Console (zones, selectZone, lang) and offers
- * window.R2View3D (setSelected, onCommand).
+ * Talks to the console through window.R2Console (zones, selectZone, lang, config,
+ * updateMarker, setConfig) and offers window.R2View3D (setSelected, onCommand, rebuild, place).
  */
 (function () {
   "use strict";
@@ -21,7 +21,7 @@
   const MAX_SPEED = 80;               // ShadowMDLite clamps dome speeds to this
   const DEG_PER_S_AT_80 = 90;         // dome turn speed at 80 (measure it on your droid)
   const STALE_MS = 300;               // the Mega stops the dome after 300 ms without a speed
-  const STORE = "shadowmd_r2_3d_markers";
+  const STORE = "shadowmd_r2_3d_markers";   // old per-browser positions, still read when a marker has no pos3d
 
   // Where each zone is on the droid, taken from the blueprint (yaw: degrees from the front,
   // + = R2's right; dome: polar = degrees from the top; body: h = height, 0 feet .. 1 top).
@@ -46,15 +46,20 @@
   const COLOURS = { dome: "#d9603b", holo: "#4a7fc1", body: "#5fa58f" };
 
   const TXT = {
-    en: { edit: "Edit marker positions", move: "Move marker", moving: "Click on R2 to place it", export: "Export", copied: "Copied to the clipboard",
-          front: "Dome to front", reset: "Reset markers", noGl: "3D not available in this browser: showing the blueprint." },
-    es: { edit: "Editar posición de los puntos", move: "Mover punto", moving: "Haz clic en R2 para colocarlo", export: "Exportar", copied: "Copiado al portapapeles",
-          front: "Dome al frente", reset: "Restaurar puntos", noGl: "3D no disponible en este navegador: se muestra el plano." },
+    en: { edit: "Edit the droid's parts", move: "Move marker", moving: "Click on R2 to place it",
+          front: "Dome to front", reset: "Reset positions",
+          resetAsk: "Put every marker back in its default position? The positions you placed are lost (export a file first to keep a copy).",
+          resetYes: "Reset positions", cancel: "Cancel", noGl: "3D not available in this browser: showing the blueprint." },
+    es: { edit: "Editar las piezas del droide", move: "Mover punto", moving: "Haz clic en R2 para colocarlo",
+          front: "Dome al frente", reset: "Restaurar posiciones",
+          resetAsk: "¿Devolver todos los puntos a su posición por defecto? Se pierden las posiciones que hayas colocado (exporta antes un fichero para guardar una copia).",
+          resetYes: "Restaurar posiciones", cancel: "Cancelar", noGl: "3D no disponible en este navegador: se muestra el plano." },
   };
   const t = (k) => (TXT[(window.R2Console && window.R2Console.lang()) || "en"] || TXT.en)[k];
 
   let renderer, scene, camera, controls, root, dome, markers = [], selected = -1, moving = false;
-  let angle = 0, speed = 0, speedAt = 0;
+  let pickCb = null; // one-shot "where did the user click on R2" (guided channel walk)
+  let angle = 0, speed = 0, speedAt = 0, failed = false;
 
   // ------------------------------------------------------------------ model and dome cut
 
@@ -204,11 +209,19 @@
   function zoneNumber(z) {
     if (z.kind === "holo") return { holo_f: "F", holo_t: "T", holo_r: "R" }[z.id] || "H";
     if (z.id === "s12") return "C";
-    const m = z.label.match(/(\d+)/);
-    return m ? m[1] : "?";
+    const m = String(z.label || "").match(/(\d+)/);
+    if (m) return m[1];
+    const ch = parseInt(z.mdPanel, 10);          // a new part without a number in its name
+    return Number.isFinite(ch) ? String(ch) : "?";
+  }
+  function zonePart(z) {
+    if (z.part === "dome" || z.part === "body") return z.part;
+    if (ZONE_3D[z.id]) return ZONE_3D[z.id].part;
+    return "body";
   }
   function zoneColour(z) {
     if (z.kind === "holo") return COLOURS.holo;
+    if (z.part || !ZONE_3D[z.id]) return zonePart(z) === "body" ? COLOURS.body : COLOURS.dome;
     return z.id.startsWith("b") ? COLOURS.body : COLOURS.dome;
   }
 
@@ -278,19 +291,24 @@
 
   function loadStored() { try { return JSON.parse(localStorage.getItem(STORE) || "{}"); } catch (e) { return {}; } }
   function saveStored(map) { try { localStorage.setItem(STORE, JSON.stringify(map)); } catch (e) { /* private window */ } }
+  const isVec3 = (a) => Array.isArray(a) && a.length === 3 && a.every((x) => Number.isFinite(x));
 
+  // Position: the marker's pos3d, else the old per-browser value, else ZONE_3D, else the
+  // front of the body
   function placeMarkers(droid) {
     const zones = window.R2Console.zones;
     const stored = loadStored();
     droid.root.updateMatrixWorld(true);
     markers = zones.map((z, i) => {
       const spec = ZONE_3D[z.id] || { part: "body", yaw: 0, h: 0.5 };
-      const parent = spec.part === "dome" ? droid.dome : droid.root;
+      const part = isVec3(z.pos3d) ? zonePart(z) : spec.part;
+      const parent = part === "dome" ? droid.dome : droid.root;
       const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: badgeTexture(zoneNumber(z), zoneColour(z), false), depthTest: true }));
       sp.scale.set(0.2, 0.2, 1);
       sp.renderOrder = 10;
-      sp.userData = { zone: i, spec };
-      if (stored[z.id]) sp.position.fromArray(stored[z.id]);
+      sp.userData = { zone: i, spec, part };
+      if (isVec3(z.pos3d)) sp.position.fromArray(z.pos3d);
+      else if (isVec3(stored[z.id])) sp.position.fromArray(stored[z.id]);
       else {
         // surfacePoint works in the droid's frame; dome markers live in the turning dome
         const p = surfacePoint(spec, droid);
@@ -299,6 +317,17 @@
       parent.add(sp);
       return sp;
     });
+  }
+
+  // Drop the sprites and make them again from the current zones (after any config change)
+  function rebuild() {
+    const droid = window.__r2droid;
+    if (!droid) return;
+    markers.forEach((m) => { if (m.parent) m.parent.remove(m); });
+    markers = [];
+    placeMarkers(droid);
+    if (selected >= markers.length) selected = markers.length - 1;
+    setSelected(selected);
   }
 
   function setSelected(i) {
@@ -392,20 +421,34 @@
     return ray.intersectObjects(objects, false)[0];
   }
 
+  /** Where a click on the droid lands, in the frame the marker lives in (dome turns with it). */
+  function spotOf(hit, droid) {
+    const n = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld) : new THREE.Vector3();
+    const p = hit.point.addScaledVector(n, 0.04);
+    const part = droid.top.includes(hit.object) ? "dome" : "body";
+    const local = part === "dome" ? droid.dome.worldToLocal(p) : root.worldToLocal(p);
+    return { pos3d: local.toArray().map((x) => +x.toFixed(4)), part };
+  }
+
   function click(e) {
     const droid = window.__r2droid;
     if (!droid) return;
+    if (pickCb) {
+      const hit = pick(e, droid.body.concat(droid.top));
+      if (!hit) return;
+      const cb = pickCb;
+      pickCb = null;
+      renderer.domElement.style.cursor = "";
+      cb(spotOf(hit, droid));
+      return;
+    }
     if (moving && selected >= 0) {
       const hit = pick(e, droid.body.concat(droid.top));
       if (!hit) return;
-      const m = markers[selected];
-      const n = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld) : new THREE.Vector3();
-      const p = hit.point.addScaledVector(n, 0.04);
-      m.position.copy(m.userData.spec.part === "dome" ? droid.dome.worldToLocal(p) : root.worldToLocal(p));
-      const stored = loadStored();
-      stored[window.R2Console.zones[selected].id] = m.position.toArray().map((x) => +x.toFixed(4));
-      saveStored(stored);
+      const zone = window.R2Console.zones[selected];
+      if (!zone) { setMoving(false); return; }
       setMoving(false);
+      window.R2Console.updateMarker(zone.id, spotOf(hit, droid));
       return;
     }
     const hit = pick(e, markers);
@@ -415,8 +458,24 @@
   function setMoving(on) {
     moving = on;
     const b = document.getElementById("r2move");
+    if (!b) return;
     b.classList.toggle("on", on);
     b.textContent = on ? t("moving") : t("move");
+  }
+
+  function setEditing(on) {
+    const tools = document.getElementById("r2edittools");
+    if (!tools) return;
+    tools.hidden = !on;
+    document.getElementById("r2edit").classList.toggle("on", on);
+    if (!on) setMoving(false);
+    window.dispatchEvent(new CustomEvent("r2-edit", { detail: on }));   // the console shows its part editor
+  }
+
+  // Straight into "click on R2 to place it" (a part just added)
+  function place() {
+    setEditing(true);
+    setMoving(true);
   }
 
   function buildTools(box) {
@@ -427,7 +486,7 @@
     bar.innerHTML = '<button type="button" id="r2front"></button>' +
                     '<button type="button" id="r2edit" class="icon">&#9998;</button>' +
                     '<span id="r2edittools" hidden><button type="button" id="r2move"></button>' +
-                    '<button type="button" id="r2export"></button><button type="button" id="r2reset"></button></span>';
+                    '<button type="button" id="r2reset"></button></span>';
     box.appendChild(bar);
     const credit = document.createElement("div");
     credit.className = "r2view-credit";
@@ -435,7 +494,6 @@
     box.appendChild(credit);
     const texts = () => {
       document.getElementById("r2front").textContent = t("front");
-      document.getElementById("r2export").textContent = t("export");
       document.getElementById("r2reset").textContent = t("reset");
       document.getElementById("r2edit").title = t("edit");
       setMoving(moving);
@@ -443,34 +501,33 @@
     texts();
     document.getElementById("r2front").addEventListener("click", () => { angle = 0; speed = 0; });
     document.getElementById("r2edit").addEventListener("click", () => {
-      const tools = document.getElementById("r2edittools");
-      tools.hidden = !tools.hidden;
-      document.getElementById("r2edit").classList.toggle("on", !tools.hidden);
-      if (tools.hidden) setMoving(false);
+      setEditing(document.getElementById("r2edittools").hidden);
     });
     document.getElementById("r2move").addEventListener("click", () => setMoving(!moving));
-    document.getElementById("r2export").addEventListener("click", async () => {
-      const json = JSON.stringify(loadStored(), null, 1);
-      try { await navigator.clipboard.writeText(json); alertTip(t("copied")); } catch (e) { console.log(json); }
-    });
-    document.getElementById("r2reset").addEventListener("click", () => {
+    // Back to the default positions: forget every pos3d and the old per-browser positions.
+    // It wipes what was placed, so ask first (in the page, never confirm())
+    function resetPositions() {
       saveStored({});
-      const droid = window.__r2droid;
-      markers.forEach((m) => m.parent.remove(m));
-      placeMarkers(droid);
-      setSelected(selected);
+      const cfg = window.R2Console.config;
+      const list = cfg.markers.map((m) => {
+        const c = Object.assign({}, m);
+        delete c.pos3d;
+        delete c.part;
+        return c;
+      });
+      window.R2Console.setConfig({ version: cfg.version, markers: list });
+    }
+    document.getElementById("r2reset").addEventListener("click", () => {
+      window.R2Console.ask(t("resetAsk"), [
+        { label: t("resetYes"), cls: "btn-warn", fn: resetPositions },
+        { label: t("cancel") },
+      ]);
     });
     window.addEventListener("r2-lang", texts);
   }
 
-  function alertTip(text) {
-    const b = document.getElementById("r2export");
-    const old = b.textContent;
-    b.textContent = text;
-    setTimeout(() => { b.textContent = old; }, 1800);
-  }
-
   function fallback() {
+    failed = true;
     document.getElementById("r2view").style.display = "none";
     document.getElementById("blueprintImg").style.display = "";
     document.getElementById("hotspots").style.display = "";
@@ -496,7 +553,17 @@
     requestAnimationFrame(frame);
   }
 
-  window.R2View3D = { setSelected, onCommand };
+  // Whether the 3D view is in use (false in the 2D blueprint fallback, without WebGL)
+  const is3d = () => !failed && !!renderer;
+
+  /** The next click on the droid calls cb({ pos3d, part }) instead of selecting; null cancels. */
+  function pickPoint(cb) {
+    pickCb = typeof cb === "function" ? cb : null;
+    if (pickCb) setMoving(false);
+    if (renderer) renderer.domElement.style.cursor = pickCb ? "crosshair" : "";
+  }
+
+  window.R2View3D = { setSelected, onCommand, rebuild, place, is3d, pickPoint };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
 })();
