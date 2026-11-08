@@ -90,22 +90,39 @@
     return out;
   }
 
-  /** Drops #if <NAME> … #endif blocks (nested #if counted) for the given define names. */
+  /**
+   * For #if blocks that test one of the given define names: drops the part that runs with the
+   * add-on on and keeps the #else part (the add-on off, i.e. the stock code). Nested #if counted.
+   */
   function dropIfBlocks(lines, names) {
-    const re = new RegExp("^\\s*#\\s*if(def)?\\s+(" + names.join("|") + ")\\b");
+    const re = new RegExp("^\\s*#\\s*if(def)?\\b.*\\b(" + names.join("|") + ")\\b");
     const out = [];
     for (let i = 0; i < lines.length; i++) {
       if (!re.test(lines[i])) {
         out.push(lines[i]);
         continue;
       }
-      let d = 0;
-      for (; i < lines.length; i++) {
-        if (/^\s*#\s*if/.test(lines[i])) d++;
-        else if (/^\s*#\s*endif/.test(lines[i]) && --d === 0) break;
+      let d = 1;
+      let keep = false;
+      for (i++; i < lines.length; i++) {
+        const l = lines[i];
+        if (/^\s*#\s*if/.test(l)) d++;
+        else if (/^\s*#\s*endif/.test(l)) {
+          if (--d === 0) break;
+        } else if (d === 1 && /^\s*#\s*(else|elif)\b/.test(l)) {
+          keep = /^\s*#\s*else\b/.test(l);
+          continue;
+        }
+        if (keep) out.push(l);
       }
     }
-    return out;
+    return dropNestedKeep(out, names);
+  }
+
+  /** The kept #else parts may hold more add-on blocks: run again until nothing changes. */
+  function dropNestedKeep(lines, names) {
+    const re = new RegExp("^\\s*#\\s*if(def)?\\b.*\\b(" + names.join("|") + ")\\b");
+    return lines.some((l) => re.test(l)) ? dropIfBlocks(lines, names) : lines;
   }
 
   /**
