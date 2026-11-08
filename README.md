@@ -1,6 +1,6 @@
 # ShadowMDLite for BetterDuino + AstropixelsPlus
 
-![ShadowMD Lite web serial console (USB + blueprint)](serial-web-console/2026-03-20-20-06-23.png)
+![ShadowMD Lite web serial console (USB + blueprint)](serial-web-console/screenshot-console.png)
 
 `ShadowMDLite` is a cleaned‑up, modernized version of the classic **Shadow MD** sketch for Arduino Mega ADK, designed to be easier to maintain and to work smoothly with **BetterDuino** firmware and **AstropixelsPlus** logic effects.
 
@@ -327,5 +327,5 @@ To send actions from a **PC** to the **Mega ADK** over the **USB serial** port (
 
 A **local HTML tool** in [`serial-web-console/`](serial-web-console/) uses the **Web Serial API** (Chrome / Edge) to connect to the Mega, send the same style of lines as the Arduino Serial Monitor, and offers an **R2‑D2 blueprint** UI for panel/holo calibration. Full details, limitations, and “what it is / what it is not” are in [`serial-web-console/README.md`](serial-web-console/README.md).
 
-![ShadowMD Lite web serial console (USB + blueprint)](serial-web-console/2026-03-20-20-06-23.png)
+![ShadowMD Lite web serial console (USB + blueprint)](serial-web-console/screenshot-console.png)
 
