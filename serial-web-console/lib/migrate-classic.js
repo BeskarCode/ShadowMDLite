@@ -240,7 +240,154 @@
     return typeof module !== "undefined" && module.exports ? require("./classic-reference.js") : {};
   }
 
-  const api = { VARIANTS, SETTINGS, indexSketch, readClassic, translateCustom, cLiteral, knownAddOns, findHandEdits };
+  // ---- writing the migrated ShadowMD Lite sketch
+  const ANCHOR = "void marcDuinoButtonPush(int type, int MD_func)\n{";
+  const MIGRATED_BASE = 200;
+  const QUEUE_SIZE = 48; // CMD_QUEUE_SIZE in ShadowMD Lite
+
+  function requireLiteBase() {
+    return root.LiteBase || (typeof module !== "undefined" && module.exports ? require("./lite-base.js") : null);
+  }
+
+  /** Line-based editor over the Lite text: finds definitions on the comment-free copy, edits the real line. */
+  function liteEditor(text) {
+    const lines = text.split("\n");
+    const bare = SketchText.stripComments(text).split("\n");
+    const find = (re) => bare.findIndex((l) => re.test(l));
+    return {
+      lines,
+      bare,
+      setVar(name, value) {
+        const i = find(new RegExp("^\\s*(?:[A-Za-z_]\\w*\\s+)+" + name + "\\s*=\\s*[^;]*;"));
+        if (i < 0) return false;
+        lines[i] = lines[i].replace(new RegExp("^(\\s*(?:[A-Za-z_]\\w*\\s+)+" + name + "\\s*=\\s*)[^;]*?(\\s*;)"), (m, a, z) => a + value + z);
+        return true;
+      },
+      setDefine(name, value) {
+        const i = find(new RegExp("^\\s*#\\s*define\\s+" + name + "\\b"));
+        if (i < 0) return false;
+        lines[i] = lines[i].replace(new RegExp("^(\\s*#\\s*define\\s+" + name + "\\s+)\\S+"), (m, a) => a + value);
+        return true;
+      },
+      setFlag(name, on) {
+        const i = find(new RegExp("^\\s*#\\s*define\\s+" + name + "\\b"));
+        if (i >= 0 && !on) lines[i] = "// " + lines[i];
+        return i >= 0;
+      },
+    };
+  }
+
+  /** MarcDuino function numbers ShadowMD Lite runs: the `case N:` of its marcDuinoButtonPush. */
+  function liteFunctionCodes(text) {
+    const f = SketchText.splitFunctions([{ name: "ShadowMDLite.ino", text }]).find((x) => x.name === "marcDuinoButtonPush");
+    const codes = new Set();
+    if (f) for (const m of f.body.matchAll(/\bcase\s+(\d+)\s*:/g)) codes.add(+m[1]);
+    return codes;
+  }
+
+  function customBlock(custom) {
+    const out = [
+      "// ---------------------------------------------------------------------------------------",
+      "// Custom buttons migrated from the classic Shadow MD (type 2): the same MarcDuino commands",
+      "// the classic sketch sent, queued with the same timing. Button code " + MIGRATED_BASE + " + n runs case n.",
+      "// ---------------------------------------------------------------------------------------",
+      "void runMigratedFunction(uint8_t n)",
+      "{",
+      "  clearSerial1Queue();",
+      "  switch (n)",
+      "  {",
+    ];
+    custom.forEach((c) => {
+      out.push("    case " + (c.code - MIGRATED_BASE) + ":   // " + c.button + " (" + c.lite + ")");
+      c.commands.forEach((k) => out.push("      queueSerial1(" + cLiteral(k.cmd) + ", " + k.delayAfterMs + ");"));
+      out.push("      break;");
+    });
+    out.push("  }", "}", "", "");
+    return out.join("\n");
+  }
+
+  /**
+   * The migrated ShadowMD Lite sketch and its report.
+   *   { ok, reason?: "not-classic", looksLike?, ino, report }
+   * report = { liteVersion, variant, settings: [{ name, value, status }], buttons: [{ classic, lite,
+   *   kind: "standard" | "custom" | "unassigned", mdFunc, code? }], custom: [{ button, lite, code, commands }],
+   *   liteOnly: [name], edits, addOns, warnings: [{ code, detail }] }
+   * opts.now: the date written in the header (for tests).
+   */
+  function migrate(files, liteBase, opts) {
+    const base = liteBase || requireLiteBase();
+    const now = (opts && opts.now) || new Date();
+    const c = readClassic(files);
+    if (!c.variant) return { ok: false, reason: "not-classic", looksLike: c.looksLike, ino: "", report: null };
+
+    const ed = liteEditor(base.text.replace(/\r\n?/g, "\n"));
+    const warnings = [];
+    const report = { liteVersion: base.version, variant: c.variant, settings: [], buttons: [], custom: [], liteOnly: [], edits: [], addOns: [], warnings };
+
+    SETTINGS.forEach((name) => {
+      if (name in c.settings && ed.setVar(name, c.settings[name])) report.settings.push({ name, value: c.settings[name], status: "copied" });
+      else {
+        report.settings.push({ name, value: null, status: "kept-lite" });
+        warnings.push({ code: "missing-setting", detail: { name } });
+      }
+    });
+
+    ed.setDefine("ENABLE_PC_TO_MARCDUINO_FORWARDING", "1");
+    ed.setDefine("ENABLE_ROS2D2", (c.defines.ENABLE_ROS2D2 || "").trim() === "1" ? "1" : "0");
+    ["SABERTOOTH_ADDR", "SYREN_ADDR"].forEach((d) => {
+      if (c.defines[d]) ed.setDefine(d, c.defines[d].split(/\s+/)[0]);
+    });
+    ["SHADOW_DEBUG", "SHADOW_VERBOSE"].forEach((d) => ed.setFlag(d, d in c.defines));
+
+    const codes = liteFunctionCodes(base.text);
+    c.buttons.forEach((b) => {
+      const row = { classic: b.classic, lite: b.lite, kind: "standard", mdFunc: b.mdFunc };
+      let value = b.mdFunc;
+      if (b.type === 2) {
+        const commands = translateCustom(b);
+        if (commands.length === 0 || commands.length > QUEUE_SIZE) {
+          warnings.push({ code: commands.length ? "queue-too-long" : "empty-custom", detail: { button: b.classic, commands: commands.length } });
+          row.kind = "unassigned";
+          value = 0;
+        } else {
+          const code = MIGRATED_BASE + report.custom.length + 1;
+          report.custom.push({ button: b.classic, lite: b.lite, code, commands });
+          row.kind = "custom";
+          row.code = code;
+          value = code;
+        }
+      } else if (b.mdFunc !== 0 && !codes.has(b.mdFunc)) {
+        warnings.push({ code: "unknown-md-func", detail: { button: b.classic, mdFunc: b.mdFunc } });
+        row.kind = "unassigned";
+        value = 0;
+      }
+      ed.setVar(b.lite + "_MD_func", String(value));
+      report.buttons.push(row);
+    });
+
+    const mapped = new Set(c.buttons.map((b) => b.lite + "_MD_func"));
+    ed.bare.forEach((l) => {
+      const m = /^\s*int\s+(\w+_MD_func)\s*=/.exec(l);
+      if (m && !mapped.has(m[1]) && report.liteOnly.indexOf(m[1]) < 0) report.liteOnly.push(m[1]);
+    });
+
+    report.edits = findHandEdits(files, c.variant);
+    report.addOns = knownAddOns(files);
+
+    let ino = ed.lines.join("\n");
+    if (report.custom.length) {
+      ino = ino.replace(ANCHOR, customBlock(report.custom) + ANCHOR + "\n  if (MD_func >= " + MIGRATED_BASE + ") { runMigratedFunction(MD_func - " + MIGRATED_BASE + "); return; }");
+    }
+    const day = now.toISOString().slice(0, 10);
+    const header = [
+      "// ShadowMD Lite migrated from a classic Shadow MD (Eebel) on " + day + " by the ShadowMD Lite web console (Lite " + base.version + ").",
+      "// ShadowMD Lite is a fork of the original Shadow MD. The builder's original sketch was not changed.",
+      "// Read the migration report before uploading.",
+    ];
+    return { ok: true, ino: header.join("\n") + "\n" + ino, report };
+  }
+
+  const api = { VARIANTS, SETTINGS, indexSketch, readClassic, translateCustom, cLiteral, knownAddOns, findHandEdits, migrate, MIGRATED_BASE };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.MigrateClassic = api;
 })(this);
