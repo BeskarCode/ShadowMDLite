@@ -34,13 +34,32 @@
     return map;
   }
 
+  // Eebel's tabbed Shadow MD and Vint43's original SHADOW_MD share the button and setting names;
+  // the reference whose functions match the sketch best tells them apart (a tie goes to Eebel).
+  const isShadowMD = (idx) => "btnUP_type" in idx.vars && "FTbtnUP_MD_func" in idx.vars;
   const VARIANTS = {
-    eebel: {
-      recognize: (idx) => "btnUP_type" in idx.vars && "FTbtnUP_MD_func" in idx.vars,
-      buttonMap: eebelButtonMap(),
-      settings: SETTINGS,
-    },
+    eebel: { label: "Eebel", recognize: isShadowMD, buttonMap: eebelButtonMap(), settings: SETTINGS },
+    vint43: { label: "Vint43", recognize: isShadowMD, buttonMap: eebelButtonMap(), settings: SETTINGS },
   };
+
+  /** The variant whose stock functions match the sketch best, among those that recognise it. */
+  function pickVariant(files, idx) {
+    const ids = Object.keys(VARIANTS).filter((k) => VARIANTS[k].recognize(idx));
+    if (ids.length < 2) return ids[0] || null;
+    const refs = root.ClassicReference || requireReference();
+    const fns = SketchText.splitFunctions(files).map((f) => [f.key, SketchText.fnv1a(SketchText.normalizeBody(f.body))]);
+    let best = ids[0];
+    let bestScore = -1;
+    ids.forEach((id) => {
+      const ref = (refs[id] || {}).functions || {};
+      const score = fns.filter(([k, h]) => ref[k] === h).length;
+      if (score > bestScore) {
+        best = id;
+        bestScore = score;
+      }
+    });
+    return best;
+  }
 
   /**
    * First active definition of every variable and #define, across the files in order:
@@ -111,7 +130,7 @@
    */
   function readClassic(files) {
     const idx = indexSketch(files);
-    const id = Object.keys(VARIANTS).find((k) => VARIANTS[k].recognize(idx)) || null;
+    const id = pickVariant(files, idx);
     const out = { variant: id, looksLike: null, settings: {}, defines: {}, buttons: [] };
     if (!id) {
       out.looksLike = "footBtnUp_MD_func" in idx.vars ? "lite" : "unknown";
@@ -380,7 +399,7 @@
     }
     const day = now.toISOString().slice(0, 10);
     const header = [
-      "// ShadowMD Lite migrated from a classic Shadow MD (Eebel) on " + day + " by the ShadowMD Lite web console (Lite " + base.version + ").",
+      "// ShadowMD Lite migrated from a classic Shadow MD (" + VARIANTS[c.variant].label + ") on " + day + " by the ShadowMD Lite web console (Lite " + base.version + ").",
       "// ShadowMD Lite is a fork of the original Shadow MD. The builder's original sketch was not changed.",
       "// Read the migration report before uploading.",
     ];

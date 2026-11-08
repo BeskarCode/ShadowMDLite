@@ -28,6 +28,22 @@ test("a function the stock sketch does not have is reported as added", () => {
   assert.deepEqual(M.findHandEdits(files, "eebel"), [{ code: "added-function", name: "myLights", file: "d_FUNCTIONS.ino", line }]);
 });
 
+test("Vint43's original SHADOW_MD (one file) is recognised as its own version, with no hand edits", () => {
+  const files = readDir("classic-vint43");
+  const r = M.readClassic(files);
+  assert.equal(r.variant, "vint43");
+  assert.equal(r.buttons.length, 40);
+  assert.deepEqual(M.findHandEdits(files, "vint43"), []);
+  assert.equal(M.readClassic(stockFiles()).variant, "eebel");
+  assert.equal(M.readClassic(readDir("classic-fernando")).variant, "eebel");
+});
+
+test("a change in Vint43's sketch is reported against Vint43's reference", () => {
+  const files = withEdits(readDir("classic-vint43"), [[/^    if\(myPS3->getButtonPress\(PS\) && myPS3->getButtonClick\(CROSS\)\)/m, "    if(myPS3->getButtonPress(PS) && myPS3->getButtonClick(CIRCLE))"]]);
+  const e = M.findHandEdits(files, "vint43");
+  assert.deepEqual(e.map((x) => [x.code, x.name]), [["changed-function", "ps3ToggleSettings"]]);
+});
+
 test("only comments or spacing changed inside a function: not an edit", () => {
   const files = withEdits(stockFiles(), [[/^void ps3ToggleSettings\(DroidPad\* myPS3 = PS3NavFoot\)\r?\n\{/m, "void ps3ToggleSettings(DroidPad* myPS3 = PS3NavFoot)\n{   // my note\n\n"]]);
   assert.deepEqual(M.findHandEdits(files, "eebel"), []);

@@ -370,7 +370,7 @@ ShadowMD Lite can run with a single Nintendo Switch Joy-Con in each hand instead
 
 ## 12. Migrating from Shadow MD
 
-The web console can do it for you: **Migrate to Lite** reads your classic Shadow MD (Eebel's version) and writes a ShadowMD Lite sketch with your controllers, speeds and buttons, custom buttons included, and tells you about anything that needs a look. See [the console's manual](serial-web-console/README.md#11-migrating-a-classic-shadow-md-to-shadowmd-lite).
+The web console can do it for you: **Migrate to Lite** reads your classic Shadow MD (Eebel's version or Vint43's original SHADOW_MD) and writes a ShadowMD Lite sketch with your controllers, speeds and buttons, custom buttons included, and tells you about anything that needs a look. See [the console's manual](serial-web-console/README.md#11-migrating-a-classic-shadow-md-to-shadowmd-lite).
 
 Coming from the classic Shadow MD sketch? [`MIGRATING_FROM_SHADOWMD.md`](MIGRATING_FROM_SHADOWMD.md)
 walks you through it step by step: back up, copy your settings and controller addresses, map your

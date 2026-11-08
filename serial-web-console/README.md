@@ -168,7 +168,7 @@ The console sends lines such as `S1::OP01` to the Mega, and the Mega passes `:OP
 
 ## 11. Migrating a classic Shadow MD to ShadowMD Lite
 
-ShadowMD Lite is a fork of the original Shadow MD. If your droid runs the classic Shadow MD (Eebel's version, the one with tabs `a_INIT.ino`, `b_SETUP.ino`, `c_MAIN.ino` and `d_FUNCTIONS.ino`), **Migrate to Lite** in the header turns it into a ShadowMD Lite sketch with your own setup, ready to compile.
+ShadowMD Lite is a fork of the original Shadow MD. If your droid runs the classic Shadow MD, either Eebel's version (the one with tabs `a_INIT.ino`, `b_SETUP.ino`, `c_MAIN.ino` and `d_FUNCTIONS.ino`) or Vint43's original SHADOW_MD (one `.ino` file), **Migrate to Lite** in the header turns it into a ShadowMD Lite sketch with your own setup, ready to compile.
 
 1. Click **Migrate to Lite** and load your sketch's tabs (or paste the sketch).
 2. Read the report. The line at the top says whether everything carried over or how many things you should look at.
@@ -183,13 +183,13 @@ What it carries over:
 
 What it tells you about:
 
-- **Code you changed by hand.** The migrator compares every function of your sketch with the stock one. A function you changed, or one you added, does not carry over by itself: the report gives its tab and line so you can redo the change in ShadowMD Lite if you still need it.
+- **Code you changed by hand.** The migrator tells which of the two versions your sketch is and compares every function with that version's stock one. A function you changed, or one you added, does not carry over by itself: the report gives its tab and line so you can redo the change in ShadowMD Lite if you still need it.
 - **A function number ShadowMD Lite does not have** (Lite runs MarcDuino functions 1 to 90): that button is left unassigned (0), never given another function.
 - **A setting missing from your sketch:** ShadowMD Lite's value is kept.
 
 Your files are only read, never changed. **Download a backup of my sketch** saves all your tabs in one text file with today's date, in case you want to go back.
 
-Other versions of the classic Shadow MD (for example KnightShade's original SHADOW) are not supported yet; the migrator says so instead of guessing.
+KnightShade's original SHADOW, which drives the sound and lights without MarcDuinos, cannot become ShadowMD Lite (a MarcDuino-based sketch) without losing them, so it is not supported; the migrator says so instead of guessing.
 
 ## 12. Troubleshooting
 
