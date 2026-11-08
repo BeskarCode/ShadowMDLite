@@ -83,8 +83,8 @@ window.SHADOWMD_LITE_I18N = {
     h2Blueprint: "R2-D2 blueprint · image-based calibration",
     blueprintAlt: "R2-D2 body diagram",
     labelZoneSelect: "Active zone",
-    zonePrev: "◀ Previous",
-    zoneNext: "Next ▶",
+    zonePrev: "Previous",
+    zoneNext: "Next",
     holoLiveTitle: "BetterDuino slave: live movement",
     holoLiveHint:
       "Holo: always live with <code>*MH</code>/<code>*MV</code>. EEPROM: MAX/MIN buttons (<code>#HO</code>/<code>#VO</code> max, <code>#HC</code>/<code>#VC</code> min).",
@@ -262,8 +262,8 @@ window.SHADOWMD_LITE_I18N = {
     h2Blueprint: "Blueprint R2-D2 · calibración por imagen",
     blueprintAlt: "Planos cuerpo R2-D2",
     labelZoneSelect: "Zona activa",
-    zonePrev: "◀ Anterior",
-    zoneNext: "Siguiente ▶",
+    zonePrev: "Anterior",
+    zoneNext: "Siguiente",
     holoLiveTitle: "BetterDuino Slave: movimiento en vivo",
     holoLiveHint:
       "Holo: en vivo siempre <code>*MH</code>/<code>*MV</code>. EEPROM: botones MAX/MIN (<code>#HO</code>/<code>#VO</code> máx, <code>#HC</code>/<code>#VC</code> mín).",
