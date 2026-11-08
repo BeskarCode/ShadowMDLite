@@ -47,14 +47,18 @@
 
   const TXT = {
     en: { edit: "Edit the droid's parts", move: "Move marker", moving: "Click on R2 to place it",
-          front: "Dome to front", reset: "Reset positions", noGl: "3D not available in this browser: showing the blueprint." },
+          front: "Dome to front", reset: "Reset positions",
+          resetAsk: "Put every marker back in its default position? The positions you placed are lost (export a file first to keep a copy).",
+          resetYes: "Reset positions", cancel: "Cancel", noGl: "3D not available in this browser: showing the blueprint." },
     es: { edit: "Editar las piezas del droide", move: "Mover punto", moving: "Haz clic en R2 para colocarlo",
-          front: "Dome al frente", reset: "Restaurar posiciones", noGl: "3D no disponible en este navegador: se muestra el plano." },
+          front: "Dome al frente", reset: "Restaurar posiciones",
+          resetAsk: "¿Devolver todos los puntos a su posición por defecto? Se pierden las posiciones que hayas colocado (exporta antes un fichero para guardar una copia).",
+          resetYes: "Restaurar posiciones", cancel: "Cancelar", noGl: "3D no disponible en este navegador: se muestra el plano." },
   };
   const t = (k) => (TXT[(window.R2Console && window.R2Console.lang()) || "en"] || TXT.en)[k];
 
   let renderer, scene, camera, controls, root, dome, markers = [], selected = -1, moving = false;
-  let angle = 0, speed = 0, speedAt = 0;
+  let angle = 0, speed = 0, speedAt = 0, failed = false;
 
   // ------------------------------------------------------------------ model and dome cut
 
@@ -486,8 +490,9 @@
       setEditing(document.getElementById("r2edittools").hidden);
     });
     document.getElementById("r2move").addEventListener("click", () => setMoving(!moving));
-    // Back to the default positions: forget every pos3d and the old per-browser positions
-    document.getElementById("r2reset").addEventListener("click", () => {
+    // Back to the default positions: forget every pos3d and the old per-browser positions.
+    // It wipes what was placed, so ask first (in the page, never confirm())
+    function resetPositions() {
       saveStored({});
       const cfg = window.R2Console.config;
       const list = cfg.markers.map((m) => {
@@ -497,11 +502,18 @@
         return c;
       });
       window.R2Console.setConfig({ version: cfg.version, markers: list });
+    }
+    document.getElementById("r2reset").addEventListener("click", () => {
+      window.R2Console.ask(t("resetAsk"), [
+        { label: t("resetYes"), cls: "btn-warn", fn: resetPositions },
+        { label: t("cancel") },
+      ]);
     });
     window.addEventListener("r2-lang", texts);
   }
 
   function fallback() {
+    failed = true;
     document.getElementById("r2view").style.display = "none";
     document.getElementById("blueprintImg").style.display = "";
     document.getElementById("hotspots").style.display = "";
@@ -527,7 +539,10 @@
     requestAnimationFrame(frame);
   }
 
-  window.R2View3D = { setSelected, onCommand, rebuild, place };
+  // Whether the 3D view is in use (false in the 2D blueprint fallback, without WebGL)
+  const is3d = () => !failed && !!renderer;
+
+  window.R2View3D = { setSelected, onCommand, rebuild, place, is3d };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
 })();
