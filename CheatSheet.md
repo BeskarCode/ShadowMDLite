@@ -83,7 +83,7 @@ With ROS2D2 and a Joy-Con, if foot PS + L2 is bound to a mode, it switches the m
 
 ### ROS2D2: modos y combinaciones (`ENABLE_ROS2D2`)
 
-Hay cuatro modos: `goto` (Ir a un punto), `forward` (Avanzar), `patrol` (Patrulla) y `follow` (Seguir un color). Solo el mando los enciende; la Pi solo puede apagarlos (`ROS:AUTO:0`). Cualquier combinación de la tabla (nombres `FOOT_PS_L2`, `FOOT_UP`, `FOOT_UP_PS`, `DOME_LEFT_L2_CIRCLE`…) puede encender un modo; mientras está asignada **no lanza** su función del MarcDuino. Pulsar la combinación del modo activo lo apaga (`AUTO OFF button`); la de otro modo cambia directamente (`AUTO ON <otro>`) y los pies se paran hasta la siguiente orden de la Pi. Con un modo encendido la Pi puede mover el dome (`ROS:DOME:`) aunque el seguimiento de caras esté apagado. `Dome PS + Dome L2` (#74) no se puede asignar.
+Hay cuatro modos: `goto` (Ir a un punto), `forward` (Avanzar), `patrol` (Patrulla) y `follow` (Seguir un color). Solo el mando los enciende; la Pi solo puede apagarlos (`ROS:AUTO:0`). Cualquier combinación de la tabla (nombres `FOOT_PS_L2`, `FOOT_UP`, `FOOT_UP_PS`, `DOME_LEFT_L2_CIRCLE`…) puede encender un modo; mientras está asignada **no lanza** su función del MarcDuino. Pulsar la combinación del modo activo lo apaga (`AUTO OFF button`); la de otro modo cambia directamente (`AUTO ON <otro>`) y los foot se paran hasta la siguiente orden de la Pi. Con un modo encendido la Pi puede mover el dome (`ROS:DOME:`) aunque el seguimiento de caras esté apagado. `Dome PS + Dome L2` (#74) no se puede asignar.
 
 | Comando USB                 | Respuesta                                      | Qué hace |
 |-----------------------------|------------------------------------------------|----------|
