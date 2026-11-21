@@ -164,7 +164,7 @@ You can cancel before the writing starts. While the Mega is being written the fl
 The console sends lines such as `S1::OP01` to the Mega, and the Mega passes `:OP01` on to the dome MarcDuino. ShadowMD Lite has always done this. The classic Shadow MD did not, so it needs a small, optional addition called **PC forwarding**.
 
 - The guide's **Patch** step (section 3) adds it to your own sketch and gives you the changed files.
-- To add it by hand, or to understand what changes, read the guide in the classic Shadow MD repository: [Using the web console with the classic Shadow MD](https://github.com/BeskarCode/SHADOW_MD_EEBEL/blob/pc-forwarding/docs/web-console.md).
+- To add it by hand, or to understand what changes, read the guide in the classic Shadow MD repository: [Using the web console with the classic Shadow MD](https://github.com/BeskarCode/SHADOW_MD_EEBEL/blob/master/docs/web-console.md).
 
 ## 11. Migrating a classic Shadow MD to ShadowMD Lite
 
