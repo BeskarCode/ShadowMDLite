@@ -17,6 +17,12 @@
 //     flash at 0x603D, which the library does not expose, so this class auto centres on
 //     connection instead: it averages the stick while it is untouched and uses that as
 //     zero. Cheaper, and it also soaks up the drift these sticks are famous for.
+//   - Safety: the stick only drives once it has been seen centred. A worn Joy-Con can rest
+//     40% off centre, which would drive the droid the moment it pairs. So the stick reads
+//     zero after every connection until it sits in the centre; a centre measured too far
+//     from where a stick rests is measured again; and a stick that freezes off centre
+//     (a thumb never holds that still) stops counting until it comes back to the centre.
+//     Buttons are not affected.
 //
 // The library parser handles the one real trap for us: a Joy-Con boots in "simple HID
 // mode" (report 0x3F) where the stick is only an 8 direction hat. SwitchProParser sees
@@ -39,6 +45,47 @@ class JoyConBT : public SwitchProBT
 public:
   JoyConBT(BTD* p, bool pair) : SwitchProBT(p, pair) {}
 
+  // Rumble on or off right now. The library only sends its rumble report once a second from
+  // inside Parse(), so a short buzz would often never go out.
+  void rumbleNow(bool on)
+  {
+    uint8_t buf[10];
+    buf[0] = 0x10;                    // rumble only
+    buf[1] = _seq++ & 0x0F;
+    for (uint8_t side = 0; side < 2; side++)
+    {
+      uint8_t* r = &buf[2 + side * 4];
+      if (on) { r[0] = 0x28; r[1] = 0x88; r[2] = 0x60; r[3] = 0x61; }   // same as the library
+      else    { r[0] = 0x00; r[1] = 0x01; r[2] = 0x40; r[3] = 0x40; }   // neutral
+    }
+    sendOutputReport(buf, sizeof(buf));
+  }
+
+  // The link is gone but the library never noticed: BTD handles "HCI disconnected" without
+  // telling the services, so this instance would stay "connected" forever and refuse the
+  // Joy-Con when it reconnects. Drop the (possibly dead) link and free the instance.
+  void forget()
+  {
+    pBtd->hci_disconnect(hci_handle);
+    BTHID::Reset();
+  }
+
+  // Subcommand 0x08 00: leave "shipment low power" mode. In that mode a sleeping Joy-Con
+  // does not wake up and call its host when a button is pressed. The Switch sends this
+  // after every connection (dekuNukem, Nintendo_Switch_Reverse_Engineering).
+  void allowButtonWake()
+  {
+    const uint8_t arg = 0x00;
+    sendSubcommand(0x08, &arg, 1);
+  }
+
+  // A Joy-Con ignores rumble until vibration is enabled with subcommand 0x48.
+  void enableVibration()
+  {
+    const uint8_t arg = 0x01;
+    sendSubcommand(0x48, &arg, 1);
+  }
+
   void requestFullReport()
   {
     const uint8_t arg = 0x30;         // full report
@@ -46,18 +93,37 @@ public:
   }
 
   // Read up to 0x1D bytes of the controller's SPI flash. The answer arrives later as a
-  // 0x21 report and is printed to Serial by ParseBTHIDData below.
+  // 0x21 report; collect it with spiReplyReady().
   void readSpi(uint16_t addr, uint8_t len)
   {
     const uint8_t arg[5] = { (uint8_t)addr, (uint8_t)(addr >> 8), 0, 0, len };
+    _spiReady = false;
     sendSubcommand(0x10, arg, sizeof(arg));
   }
+
+  // True once, after the reply to readSpi(addr, ...) arrived. Copies its first 10 bytes.
+  bool spiReplyReady(uint16_t addr, uint8_t out[10])
+  {
+    if (!_spiReady || _spiAddr != addr) return false;
+    memcpy(out, _spiData, 10);
+    _spiReady = false;
+    return true;
+  }
+
+  // Print every SPI reply to Serial, for the bench test.
+  bool spiEcho = false;
 
 protected:
   virtual void ParseBTHIDData(uint8_t len, uint8_t *buf)
   {
     // 0x21 = subcommand reply. [13] ack, [14] subcommand, then its data.
-    if (buf[0] == 0x21 && len > 20 && buf[14] == 0x10)
+    if (buf[0] == 0x21 && len > 30 && buf[14] == 0x10)
+    {
+      _spiAddr = buf[15] | (buf[16] << 8);
+      memcpy(_spiData, &buf[20], 10);
+      _spiReady = true;
+    }
+    if (spiEcho && buf[0] == 0x21 && len > 20 && buf[14] == 0x10)
     {
       Serial.print(F("SPI 0x"));
       Serial.print(buf[15] | (buf[16] << 8), HEX);
@@ -87,7 +153,10 @@ private:
     sendOutputReport(buf, 11 + len);
   }
 
-  uint8_t _seq = 0;
+  uint8_t  _seq = 0;
+  bool     _spiReady = false;
+  uint16_t _spiAddr = 0;
+  uint8_t  _spiData[10];
 };
 #include "DroidController.h"
 
@@ -198,6 +267,7 @@ public:
     _calSamples = 0;
     _calSumX = 0;
     _calSumY = 0;
+    _armed = false;                        // the stick drives again only once seen centred
   }
 
   // ---- DroidController -----------------------------------------------------------------
@@ -221,6 +291,7 @@ public:
     if (now && !_wasConnected)
     {
       recalibrate();                       // fresh connection, measure the centre again
+      _warned = false;
       _gotFullReport = false;
       _lastModeRequest = 0;
       _sideKnown = false;
@@ -252,11 +323,22 @@ public:
       _lastModeRequest = millis();
       _joy.requestFullReport();
     }
+    else if (_gotFullReport && millis() - _lastMessage > LINK_LOST_MS)
+    {
+      // A Joy-Con in full mode reports 60 times a second, so this silence means it is gone
+      // (sync pressed, out of range, battery). Free the instance so it can reconnect.
+      _joy.forget();
+      setStick(0, 0);
+      setButtons(0);
+      return;
+    }
 
     // ---- stick ---------------------------------------------------------------------------
-    // Only one stick is populated on a single Joy-Con. The parser already inverts Y so that
-    // forward is positive; this layer wants forward negative, like the Nav reports it, so
-    // it gets inverted back below.
+    // Only one stick is populated on a single Joy-Con. The parser returns Y with forward
+    // NEGATIVE (2048 - raw, "the same coordinate as the simple report"), despite what its
+    // comment suggests. Below, Y is first turned to forward positive, so the sideways
+    // rotation works in ordinary x/y terms, then back to forward negative for this layer,
+    // like the Nav reports it: stick pushed away from you reads negative.
     // Which half connected to this slot depends on who reconnects first, not on the slot.
     // A half reports the other half's stick as all zeros, which the parser turns into
     // exactly (-2048, 2048), so the first full report tells us which one this is.
@@ -272,7 +354,9 @@ public:
         _map = (_side == JOYCON_LEFT) ? JOYCON_MAP_LEFT : JOYCON_MAP_RIGHT;
       }
       _ledAnimUntil = millis() + LED_ANIM_MS;   // "connected" signal, see below
-      _lastLedStep = 0;
+      _joy.enableVibration();                    // off by default; buzz() needs it
+      _lastLedStep = millis();             // first LED step 200 ms later: subcommands need room
+      _wakeSent = false;
       recalibrate();                       // centre must be measured on the right stick
       setStick(0, 0);
       setButtons(0);
@@ -288,13 +372,17 @@ public:
       if ((int32_t)(t - _ledAnimUntil) >= 0)
       {
         _ledAnimUntil = 0;
-        _joy.setLedRaw(_side == JOYCON_LEFT ? 0x01 : 0x02);
+        _joy.setLedRaw(_waiting ? 0xF0 : currentLed());
       }
       else if (t - _lastLedStep >= 200)
       {
         _lastLedStep = t;
-        _ledOuter = !_ledOuter;
-        _joy.setLedRaw(_ledOuter ? 0x09 : 0x06);   // LED1+LED4, then LED2+LED3
+        if (!_wakeSent) { _wakeSent = true; _joy.allowButtonWake(); }   // takes one LED step
+        else
+        {
+          _ledOuter = !_ledOuter;
+          _joy.setLedRaw(_ledOuter ? 0x09 : 0x06);   // LED1+LED4, then LED2+LED3
+        }
       }
     }
 
@@ -320,9 +408,21 @@ public:
       _calSumY += rawY;
       if (++_calSamples >= CAL_SAMPLES)
       {
-        _centreX = _calSumX / CAL_SAMPLES;
-        _centreY = _calSumY / CAL_SAMPLES;
-        _calibrating = false;
+        const int16_t cx = _calSumX / CAL_SAMPLES;
+        const int16_t cy = _calSumY / CAL_SAMPLES;
+        if (abs(cx) > CENTRE_MAX_FROM_NOMINAL || abs(cy) > CENTRE_MAX_FROM_NOMINAL)
+        {
+          // No healthy stick rests that far out: it is being held, or it is worn. Taking
+          // this as the centre would hide a stick that may jump back. Measure again.
+          warnOnce(F(": stick rests far from centre (held, or drift). Stick off until it centres."));
+          recalibrate();
+        }
+        else
+        {
+          _centreX = cx;
+          _centreY = cy;
+          _calibrating = false;
+        }
       }
       setStick(0, 0);       // report centred while measuring, never a stale value
       }
@@ -333,9 +433,10 @@ public:
       // sits near the centre and does not move at all for a while, nobody is holding it:
       // take that spot as the new centre. A thumb is never that still.
       if (newReport) trackDrift(rawX, rawY);
+      if (newReport) checkArmed(rawX - _centreX, rawY - _centreY, rawX, rawY);
 
-      int16_t x = rawX - _centreX;
-      int16_t y = rawY - _centreY;
+      int16_t x = _armed ? rawX - _centreX : 0;
+      int16_t y = _armed ? _centreY - rawY : 0;   // forward positive from here on
 
       if (_grip == JOYCON_SIDEWAYS)
       {
@@ -382,6 +483,13 @@ public:
 
   JoyConSide side() const { return _side; }
 
+  // Left half drives the feet, right half the dome, whichever slot it connected into.
+  DroidSlot preferredSlot() const override
+  {
+    if (!_sideKnown || !isConnected()) return SLOT_ANY;
+    return _side == JOYCON_LEFT ? SLOT_FOOT : SLOT_DOME;
+  }
+
   // ---- extras a Nav cannot do ------------------------------------------------------------
 
   // 0 to 4, where 0 is critical. Worth printing at startup and before an event.
@@ -389,9 +497,29 @@ public:
 
   // A short buzz. Useful as confirmation when a mode changes, for instance entering voice
   // mode, which on a Nav you can only tell by listening to the droid.
-  void buzz(bool on) { _joy.setRumble(on, on); }
+  void buzz(bool on) { if (isConnected()) _joy.rumbleNow(on); }
+
+  // While pairing: flash all four player LEDs, so the connected half shows the droid is
+  // waiting for the other one. Off: back to its player LED.
+  void setWaiting(bool on)
+  {
+    _waiting = on;
+    if (isConnected() && !_ledAnimUntil) _joy.setLedRaw(on ? 0xF0 : currentLed());
+  }
+
+  // Player LEDs to show once connected, instead of this half's default (LED 1 left, LED 2
+  // right). Low nibble on, high nibble flashing, as subcommand 0x30 takes them. 0 goes back
+  // to the default. Kept across reconnections.
+  void setPlayerLeds(uint8_t pattern)
+  {
+    _ledOverride = pattern;
+    if (isConnected() && !_ledAnimUntil && !_waiting) _joy.setLedRaw(currentLed());
+  }
 
   bool isCalibrating() const { return _calibrating; }
+
+  // False while the stick is ignored for safety (not yet seen centred, or frozen off centre).
+  bool isStickArmed() const { return _armed; }
 
   // Escape hatch for anything this wrapper does not cover yet.
   JoyConBT* raw() { return &_joy; }
@@ -408,8 +536,12 @@ private:
   void trackDrift(int16_t rawX, int16_t rawY)
   {
     const uint32_t now = millis();
-    const bool nearCentre = abs(rawX - _centreX) < DRIFT_MAX_OFFSET &&
-                            abs(rawY - _centreY) < DRIFT_MAX_OFFSET;
+    // Near the centre we measured, or near the stick's nominal centre. The second one also
+    // repairs a centre measured while someone was touching the stick, for instance while
+    // holding the sync button during pairing.
+    const bool nearCentre = (abs(rawX - _centreX) < DRIFT_MAX_OFFSET &&
+                             abs(rawY - _centreY) < DRIFT_MAX_OFFSET) ||
+                            (abs(rawX) < DRIFT_NOMINAL_OFFSET && abs(rawY) < DRIFT_NOMINAL_OFFSET);
     const bool still = abs(rawX - _stillX) <= DRIFT_STILL_NOISE &&
                        abs(rawY - _stillY) <= DRIFT_STILL_NOISE;
     if (!nearCentre || !still)
@@ -425,6 +557,58 @@ private:
       _centreY = _stillY;
       _stillSince = now;
     }
+  }
+
+  // dx, dy: offset from the measured centre. Arms the stick once it is seen centred; disarms
+  // it if it freezes off centre for STUCK_MS, short of the edge. Holding full deflection
+  // against the gate is steady too, which is why the edge does not count.
+  void checkArmed(int16_t dx, int16_t dy, int16_t rawX, int16_t rawY)
+  {
+#ifdef JOYCON_DEBUG_STICK
+    static uint32_t dbgAt = 0;
+    if (millis() - dbgAt >= 100)
+    {
+      dbgAt = millis();
+      Serial.print(F("STK ")); Serial.print(name());
+      Serial.print(' '); Serial.print(dx); Serial.print(' '); Serial.print(dy);
+      Serial.print(F(" armed=")); Serial.println(_armed);
+    }
+#endif
+    const bool centred = abs(dx) < ARM_BAND && abs(dy) < ARM_BAND;
+    if (!_armed)
+    {
+      if (centred)
+      {
+        _armed = true;
+        if (_warned) { Serial.print(name()); Serial.println(F(": stick centred, driving again.")); _warned = false; }
+      }
+      return;
+    }
+    const int16_t edge = (int16_t)((int32_t)_range * 85 / 100);
+    const bool atEdge = abs(dx) > edge || abs(dy) > edge;
+    const bool still = abs(rawX - _stuckX) <= DRIFT_STILL_NOISE &&
+                       abs(rawY - _stuckY) <= DRIFT_STILL_NOISE;
+    const uint32_t now = millis();
+    if (centred || atEdge || !still)
+    {
+      _stuckX = rawX;
+      _stuckY = rawY;
+      _stuckSince = now;
+      return;
+    }
+    if (now - _stuckSince >= STUCK_MS)
+    {
+      _armed = false;
+      warnOnce(F(": stick frozen off centre (drift?). Stick off until it centres."));
+    }
+  }
+
+  void warnOnce(const __FlashStringHelper* msg)
+  {
+    if (_warned) return;
+    _warned = true;
+    Serial.print(name());
+    Serial.println(msg);
   }
 
   int16_t scale(int32_t v) const
@@ -456,12 +640,28 @@ private:
   int16_t  _stillY = 0;
   uint32_t _stillSince = 0;
   static const int16_t  DRIFT_MAX_OFFSET  = 250;   // raw, about 25% of the stick range
+  static const int16_t  DRIFT_NOMINAL_OFFSET = 400; // raw, from 2048; real rest points seen: up to ~310
   static const int16_t  DRIFT_STILL_NOISE = 12;    // raw jitter of a stick nobody touches
   static const uint16_t DRIFT_STILL_MS    = 1500;
+  // Safety (see the top of the file)
+  bool     _armed = false;
+  bool     _warned = false;
+  int16_t  _stuckX = 0;
+  int16_t  _stuckY = 0;
+  uint32_t _stuckSince = 0;
+  static const int16_t  ARM_BAND = 80;                 // raw, about 8% of the range: "centred"
+  static const int16_t  CENTRE_MAX_FROM_NOMINAL = 400; // raw; healthy rest points seen: up to ~310
+  static const uint16_t STUCK_MS = 2000;               // a thumb never holds this still for 2 s
   bool     _ledOuter = false;
   uint32_t _ledAnimUntil = 0;
+  bool     _waiting = false;
+  bool     _wakeSent = true;
+  uint8_t  _ledOverride = 0;
+  uint8_t  playerLed() const { return _side == JOYCON_LEFT ? 0x01 : 0x02; }
+  uint8_t  currentLed() const { return _ledOverride ? _ledOverride : playerLed(); }
   uint32_t _lastLedStep = 0;
   static const uint16_t LED_ANIM_MS = 2000;
+  static const uint16_t LINK_LOST_MS = 3000;
   uint32_t _lastModeRequest = 0;
   int16_t  _centreX = 0;
   int16_t  _centreY = 0;

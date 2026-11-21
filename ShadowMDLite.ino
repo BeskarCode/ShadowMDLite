@@ -180,7 +180,7 @@ int CustomSongMax = 8; //Total Number of Custom Songs
 // other way round. The Pi can never switch either on. 0 = off: the sketch builds exactly
 // as before. Off by default, so existing droids (and the DomeTracker PoC, whose DM: would
 // then need PS + L2 on the dome Nav first) keep working unchanged.
-#define ENABLE_ROS2D2 0
+#define ENABLE_ROS2D2 1
 #define FOOT_AUTO_MAX_DRIVE   40       // |ROS:FOOT: drive| clamp; keep below drivespeed1 (70)
 #define FOOT_AUTO_MAX_TURN    30       // |ROS:FOOT: turn| clamp; keep below turnspeed (50)
 #define FOOT_AUTO_TIMEOUT_MS  300      // no ROS:FOOT: for this long -> the feet stop
@@ -624,6 +624,10 @@ int marcDuinoBaudRate = 9600; // Set the baud rate for the Syren motor controlle
 #include <PS3BT.h>
 #include <usbhub.h>
 
+// Controller abstraction: pick PS3 Navs or Joy-Cons in ControllerConfig.h
+#include "ControllerConfig.h"
+#include "DroidPad.h"
+
 #ifdef CANBUS
   #include <mcp_can.h>
   #include <SPI.h>
@@ -693,10 +697,46 @@ Sabertooth *SyR=new Sabertooth(SYREN_ADDR, Serial2);
 ///////Setup for USB and Bluetooth Devices////////////////////////////
 USB Usb;
 BTD Btd(&Usb);
-PS3BT PS3NavFootImpl(&Btd);
-PS3BT PS3NavDomeImpl(&Btd);
-PS3BT* PS3NavFoot=&PS3NavFootImpl;
-PS3BT* PS3NavDome=&PS3NavDomeImpl;
+
+// The sketch keeps calling PS3NavFoot and PS3NavDome exactly as it always has: the pointers
+// still answer getButtonPress(), getAnalogHat(), PS3NavigationConnected and the rest.
+// Which physical controller is behind them is decided in ControllerConfig.h.
+#ifdef USE_PS3_NAV
+  PS3NavController navFootImpl(&Btd, "FOOT", LED1);
+  PS3NavController navDomeImpl(&Btd, "DOME", LED2);
+  DroidPad footPad(&navFootImpl, &navFootImpl);
+  DroidPad domePad(&navDomeImpl, &navDomeImpl);
+#else
+  JoyConController joyFootImpl(&Btd, JOYCON_LEFT,  "FOOT", JOYCON_PAIRING_MODE);
+  JoyConController joyDomeImpl(&Btd, JOYCON_RIGHT, "DOME", JOYCON_PAIRING_MODE);
+  DroidPad footPad(&joyFootImpl);
+  DroidPad domePad(&joyDomeImpl);
+#endif
+DroidPad* PS3NavFoot=&footPad;
+DroidPad* PS3NavDome=&domePad;
+
+#ifdef USE_JOYCON
+  #include "JoyConPairing.h"
+  // Pairing without editing or re-uploading: first boot, Minus+Capture / Plus+Home held
+  // for 5 s, three resets in a row, or JOYPAIR from the web console. See JoyConPairing.h.
+  JoyConPairing joyPairing(&Btd, &joyFootImpl, &joyDomeImpl);
+
+  // What the droid says during pairing: an R2 sound and a line on the console.
+  void onJoyConPairEvent(JoyConPairEvent e)
+  {
+    const char* sound = JOYCON_SOUND_STARTED;
+    switch (e)
+    {
+      case JCP_STARTED:         sound = JOYCON_SOUND_STARTED; Serial.println(F("JOYPAIR started: hold sync on a Joy-Con")); break;
+      case JCP_PAIRED_ONE:      sound = JOYCON_SOUND_PAIRED;  Serial.println(F("JOYPAIR paired one, now the other")); break;
+      case JCP_DONE:            sound = JOYCON_SOUND_DONE;    Serial.println(F("JOYPAIR done")); break;
+      case JCP_TIMEOUT:         sound = JOYCON_SOUND_TIMEOUT; Serial.println(F("JOYPAIR timed out")); break;
+      case JCP_HOLD_SYNC_AGAIN: sound = JOYCON_SOUND_AGAIN;   Serial.println(F("JOYPAIR hold sync again on that Joy-Con")); break;
+    }
+    Serial1.print(sound);
+    Serial1.print('\r');
+  }
+#endif
 
 #ifdef CANBUS
 MCP_CAN CAN0(SS);   // Set CS to pin SS
@@ -759,10 +799,6 @@ void setup()
     
     Serial.println("\r\nSystem starting up.\r\n");
     reportResetCause();
-#if ENABLE_ROS2D2
-    Serial.println(F("AUTO OFF boot"));
-    Serial.println(F("TRACK OFF boot"));
-#endif
 
     // CAN-Bus
     #ifdef CANBUS
@@ -803,6 +839,15 @@ void setup()
 
     //Setup for PS3
     Serial.print(F("\r\nRegistering Controller Events... "));
+    PS3NavFoot->begin();
+    PS3NavDome->begin();
+    #ifdef USE_JOYCON
+      joyFootImpl.setStickRange(JOYCON_STICK_RANGE);
+      joyDomeImpl.setStickRange(JOYCON_STICK_RANGE);
+      joyFootImpl.setGrip(JOYCON_GRIP);
+      joyDomeImpl.setGrip(JOYCON_GRIP);
+      joyPairing.begin(onJoyConPairEvent, JOYCON_PAIRING_MODE);
+    #endif
     PS3NavFoot->attachOnInit(onInitPS3NavFoot); // onInitPS3NavFoot is called upon a new connection
     PS3NavDome->attachOnInit(onInitPS3NavDome); 
     Serial.print(F("done.\r\n"));
@@ -833,6 +878,12 @@ void setup()
 
     randomSeed(analogRead(0));  // random number seed for dome automation   
     Serial.print(F("\r\n\r\nEntering Loop."));
+#if ENABLE_ROS2D2
+    // Last thing in setup(): USB and the motor controllers are up, loop() reads next. The Pi bridge
+    // re-sends its bindings when it sees these lines, so they must not come before the delays above.
+    Serial.println(F("AUTO OFF boot"));
+    Serial.println(F("TRACK OFF boot"));
+#endif
 }
 
 // =======================================================================================
@@ -1102,6 +1153,17 @@ static void processPCSerialLine(const char* line)
     return;
   }
 
+  if (!strcmp(p, "JOYPAIR") || !strcmp(p, "joypair"))
+  {
+    #ifdef USE_JOYCON
+      joyPairing.request();
+      Serial.println(F("OK JOYPAIR"));
+    #else
+      Serial.println(F("ERR JOYPAIR needs USE_JOYCON in ControllerConfig.h"));
+    #endif
+    return;
+  }
+
   if (!strcmp(p, "PING") || !strcmp(p, "ping"))
   {
     Serial.println(F("PONG"));
@@ -1352,7 +1414,7 @@ void loop()
 //           footDrive Motor Control Section
 // =======================================================================================
 
-boolean ps3FootMotorDrive(PS3BT* myPS3 = PS3NavFoot)
+boolean ps3FootMotorDrive(DroidPad* myPS3 = PS3NavFoot)
 {
   int stickSpeed = 0;
   int turnnum = 0;
@@ -1605,7 +1667,7 @@ void footAutoDrive()
 //           domeDrive Motor Control Section
 // =======================================================================================
 
-int ps3DomeDrive(PS3BT* myPS3 = PS3NavDome)
+int ps3DomeDrive(DroidPad* myPS3 = PS3NavDome)
 {
     int domeRotationSpeed = 0;
       
@@ -1741,7 +1803,7 @@ void domeDrive()
 //                               Toggle Control Section
 // =======================================================================================
 
-void ps3ToggleSettings(PS3BT* myPS3 = PS3NavFoot)
+void ps3ToggleSettings(DroidPad* myPS3 = PS3NavFoot)
 {
 
     // enable / disable drive stick
@@ -1771,7 +1833,17 @@ void ps3ToggleSettings(PS3BT* myPS3 = PS3NavFoot)
     }
     
     // Enable and Disable Overspeed
+    // A Joy-Con has no L3, so there the toggle is stick click + ZL (PS + L2 to the sketch)
+    #ifdef USE_JOYCON
+    // With ROS2D2, PS + L2 belongs to its mode when one is bound (bindings.modeFor(0)): no overspeed toggle
+    #if ENABLE_ROS2D2
+    if (myPS3->getButtonPress(PS) && myPS3->getButtonPress(L2) && isStickEnabled && bindings.modeFor(0) == MODE_NONE)
+    #else
+    if (myPS3->getButtonPress(PS) && myPS3->getButtonPress(L2) && isStickEnabled)
+    #endif
+    #else
     if (myPS3->getButtonPress(L3) && myPS3->getButtonPress(L1) && isStickEnabled)
+    #endif
     {
       
        if ((millis() - previousSpeedToggleMillis) > 1000)
@@ -3079,7 +3151,13 @@ void onInitPS3NavFoot()
       output += btAddress;
     #endif
     
+    // Joy-Cons: only a Joy-Con paired during a pairing session can connect at all, so the
+    // pairing is the gate. The MAC lists hold PS3 Nav addresses and would drop every Joy-Con.
+    #ifdef USE_JOYCON
+    if (true)
+    #else
     if (btAddress == PS3ControllerFootMac || btAddress == PS3ControllerBackupFootMac)
+    #endif
     {
         
           #ifdef SHADOW_DEBUG
@@ -3118,7 +3196,13 @@ void onInitPS3NavDome()
     isSecondaryPS3NavigatonInitialized = true;
     badPS3Data = 0;
     
+    // Joy-Cons: only a Joy-Con paired during a pairing session can connect at all, so the
+    // pairing is the gate. The MAC lists hold PS3 Nav addresses and would drop every Joy-Con.
+    #ifdef USE_JOYCON
+    if (true)
+    #else
     if (btAddress == PS3ControllerDomeMAC || btAddress == PS3ControllerBackupDomeMAC)
+    #endif
     {
         
           #ifdef SHADOW_DEBUG
@@ -3419,6 +3503,21 @@ boolean readUSB()
 {
   
      Usb.Task();
+
+     // Controller abstraction: refresh both controllers once per loop, right after Usb.Task().
+     // With Joy-Cons this also puts the left half on the feet and the right on the dome.
+     DroidPad::updatePair(*PS3NavFoot, *PS3NavDome);
+
+     #ifdef USE_JOYCON
+       // While pairing, the droid does not move and the controllers are not read.
+       joyPairing.update();
+       if (joyPairing.active())
+       {
+           if (!isFootMotorStopped) { ST->stop(); isFootMotorStopped = true; footDriveSpeed = 0; }
+           if (!isDomeMotorStopped) { SyR->stop(); isDomeMotorStopped = true; }
+           return false;
+       }
+     #endif
      
     //The more devices we have connected to the USB or BlueTooth, the more often Usb.Task need to be called to eliminate latency.
     if (PS3NavFoot->PS3NavigationConnected) 

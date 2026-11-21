@@ -12,11 +12,11 @@
 // HOW TO RUN IT
 //
 // 1. Pick what you are testing below with TEST_MODE.
-// 2. For the first run with new Joy-Cons, set PAIR_NEW_DEVICE to true, upload, then hold
-//    the small sync button on the Joy-Con rail until its LEDs run back and forth. Once it
-//    connects, set PAIR_NEW_DEVICE back to false and upload again, so it reconnects on its
-//    own from then on.
-// 3. Serial Monitor at 115200.
+// 2. Pairing works as in the droid sketches (JoyConPairing.h): on the first boot it starts
+//    by itself, hold sync on each Joy-Con. Later: Minus+Capture or Plus+Home for 5 s, three
+//    resets in a row, or send 'p'.
+// 3. Serial Monitor at 115200. Commands: 'p' pair, 'r' dump each Joy-Con's two pairing
+//    records, 'f' forget the paired Joy-Cons (the next boot pairs from scratch).
 //
 // WHAT TO CHECK
 //
@@ -39,12 +39,11 @@
 #include "DroidController.h"
 #include "PS3NavController.h"
 #include "JoyConController.h"
+#include "JoyConPairing.h"
 
 // --- configuration ----------------------------------------------------------------------
 #define TEST_PS3NAV   0   // set to 1 to test the PS3 Navs
 #define TEST_JOYCON   1   // set to 1 to test the Joy-Cons
-
-const bool PAIR_NEW_DEVICE = false;   // true only while pairing a controller for the first time
 // -----------------------------------------------------------------------------------------
 
 USB Usb;
@@ -56,8 +55,25 @@ PS3NavController navDome(&Btd, "NAV-DOME", LED2);
 #endif
 
 #if TEST_JOYCON
-JoyConController joyFoot(&Btd, JOYCON_LEFT,  "JOY-L", PAIR_NEW_DEVICE);
-JoyConController joyDome(&Btd, JOYCON_RIGHT, "JOY-R", PAIR_NEW_DEVICE);
+JoyConController joyFoot(&Btd, JOYCON_LEFT,  "JOY-L");
+JoyConController joyDome(&Btd, JOYCON_RIGHT, "JOY-R");
+JoyConPairing joyPairing(&Btd, &joyFoot, &joyDome);
+
+void onPairEvent(JoyConPairEvent e)
+{
+  switch (e)
+  {
+    case JCP_STARTED:         Serial.println(F("PAIRING started: hold sync on a Joy-Con")); break;
+    case JCP_PAIRED_ONE:      Serial.println(F("PAIRING paired one, now the other")); break;
+    case JCP_DONE:            Serial.println(F("PAIRING done")); break;
+    case JCP_TIMEOUT:         Serial.println(F("PAIRING timed out")); break;
+    case JCP_HOLD_SYNC_AGAIN: Serial.println(F("PAIRING that Joy-Con remembers another host: hold sync again")); break;
+  }
+}
+
+// Which controller is driving what, after routing. Starts in creation order.
+DroidController* footSlot = &joyFoot;
+DroidController* domeSlot = &joyDome;
 #endif
 
 // Same dead zones as the main sketch, converted to the normalised scale.
@@ -95,13 +111,12 @@ void setup()
   // comparable between the two controllers.
   joyFoot.setGrip(JOYCON_UPRIGHT);
   joyDome.setGrip(JOYCON_UPRIGHT);
+  joyFoot.raw()->spiEcho = true;     // 'r' prints the pairing records
+  joyDome.raw()->spiEcho = true;
+  joyPairing.begin(onPairEvent);
 #endif
 
-  if (PAIR_NEW_DEVICE)
-    Serial.println(F("\r\nPAIRING MODE: hold the sync button on the controller now."));
-  else
-    Serial.println(F("\r\nWaiting for controllers to reconnect..."));
-
+  Serial.println(F("\r\nWaiting for controllers..."));
   Serial.println();
 }
 
@@ -117,20 +132,31 @@ void loop()
   joyFoot.update();
   joyDome.update();
 
-  // The library leaves pairing mode as soon as one controller connects, and also gives up
-  // after a few empty inquiries. While pairing, keep re-arming it until both are in.
-  // Send 'p' over serial to pair a Joy-Con without re-flashing.
-  static bool _pairRequested = false;
-  // Send 'r' to dump the pairing info stored in each connected Joy-Con's flash.
+  // Same routing the droid sketches use: left half to the feet, right half to the dome.
+  if (routeBySlot(footSlot, domeSlot))
+  {
+    Serial.print(F("ROUTED: feet <- "));
+    Serial.print(footSlot->name());
+    Serial.print(F(", dome <- "));
+    Serial.println(domeSlot->name());
+  }
+
+  // The same pairing session the droid sketches run.
+  joyPairing.update();
+
+  // Serial commands: 'p' pair, 'r' dump pairing records, 'f' forget paired Joy-Cons.
   static uint32_t _spiStep = 0;
   if (Serial.available())
   {
     const char c = Serial.read();
     if (c == 'p')
     {
-      _pairRequested = true;
-      Btd.pairWithHID();
-      Serial.println(F("PAIRING requested over serial: hold the sync button now."));
+      joyPairing.request();
+    }
+    else if (c == 'f')
+    {
+      EEPROM.write(JOYCON_EEPROM_ADDR, 0xFF);   // invalid magic: next boot pairs from scratch
+      Serial.println(F("Paired Joy-Cons forgotten. Reset the Mega to pair from scratch."));
     }
     else if (c == 'r')
     {
@@ -151,16 +177,6 @@ void loop()
     _spiStep = millis() | 1;
     if (++n >= 4) { n = 0; _spiStep = 0; }
   }
-
-  static uint32_t _lastPairArm = 0;
-  if ((PAIR_NEW_DEVICE || _pairRequested) && !Btd.pairWithHIDDevice &&
-      !(joyFoot.isConnected() && joyDome.isConnected()) &&
-      millis() - _lastPairArm > 15000)
-  {
-    _lastPairArm = millis();
-    Btd.pairWithHID();
-    Serial.println(F("PAIRING re-armed: hold the sync button on the other Joy-Con."));
-  }
 #endif
 
   // Print every 500 ms, or at once when a button changes so short presses are not missed.
@@ -178,8 +194,10 @@ void loop()
 #endif
 
 #if TEST_JOYCON
-  reportJoyCon(joyFoot, footDeadZone);
-  reportJoyCon(joyDome, domeDeadZone);
+  Serial.print(F("FEET -> "));
+  reportJoyCon(*(JoyConController*)footSlot, footDeadZone);
+  Serial.print(F("DOME -> "));
+  reportJoyCon(*(JoyConController*)domeSlot, domeDeadZone);
 
   // Edge detection check: once per press, never repeatedly.
   if (joyFoot.clicked(DB_A))   Serial.println(F("  [click] JOY-L A"));

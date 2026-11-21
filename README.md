@@ -1,6 +1,8 @@
 # ShadowMDLite for BetterDuino + AstropixelsPlus
 
-![ShadowMD Lite web serial console (USB + blueprint)](serial-web-console/2026-03-20-20-06-23.png)
+![ShadowMD Lite web serial console (USB + blueprint)](serial-web-console/screenshot-console.png)
+
+---
 
 `ShadowMDLite` is a cleaned‑up, modernized version of the classic **Shadow MD** sketch for Arduino Mega ADK, designed to be easier to maintain and to work smoothly with **BetterDuino** firmware and **AstropixelsPlus** logic effects.
 
@@ -270,7 +272,7 @@ To remap a button to a different MarcDuino function:
 ### 6.1 Hardware
 
 - Arduino Mega ADK rev3.
-- **PS3 Move Navigation** controller(s) (the small one-handed Move accessory, *not* standard PS3/DualShock controllers).
+- **PS3 Move Navigation** controller(s) (the small one-handed Move accessory, *not* standard PS3/DualShock controllers), **or Nintendo Switch Joy-Cons** (see **§11**).
   - Buttons available: D‑pad (UP, DOWN, LEFT, RIGHT), **L1**, **L2**, **L3** (stick click), **CROSS**, **CIRCLE**, **PS**. Face buttons are **only CROSS and CIRCLE**. No SELECT, TRIANGLE, SQUARE, START, or R1/R2/R3.
   - **Cross‑controller L3**: To avoid pressing L3 and a d‑pad direction on the same controller, L3 is used on the *other* controller: **Foot arrow + Dome L3** and **Dome arrow + Foot L3**. The 8 combos (`footBtn*L3_MD_func`, `domeBtn*L3_MD_func`) default to `0` (FREE); set to a MarcDuino code (1–89) to assign an action.
 - Sabertooth foot drive and SyRen 10 (or compatible) for dome.
@@ -282,7 +284,7 @@ To remap a button to a different MarcDuino function:
 ### 6.2 Arduino libraries
 
 - **USB Host Shield**  
-  (Kristian Lauszus / TKJ Electronics – used for PS3BT).
+  (Kristian Lauszus / TKJ Electronics – used for PS3BT). The version depends on the controller: for **PS3 Navs keep the older library** bundled in `SHADOW_MD_Arduino_Libraries` (the Navs do not work with 1.7.0); for **Joy-Cons use 1.7.0 or newer** (older releases do not ship `SwitchProBT`).
 - **Sabertooth**  
   (for dual motor driver control).
 - Standard AVR / Arduino core for Mega.
@@ -327,5 +329,63 @@ To send actions from a **PC** to the **Mega ADK** over the **USB serial** port (
 
 A **local HTML tool** in [`serial-web-console/`](serial-web-console/) uses the **Web Serial API** (Chrome / Edge) to connect to the Mega, send the same style of lines as the Arduino Serial Monitor, and offers an **R2‑D2 blueprint** UI for panel/holo calibration. Full details, limitations, and “what it is / what it is not” are in [`serial-web-console/README.md`](serial-web-console/README.md).
 
-![ShadowMD Lite web serial console (USB + blueprint)](serial-web-console/2026-03-20-20-06-23.png)
+It also works with the classic Shadow MD (with PC forwarding), shows your own droid's parts on R2 in 3D, finds which part is on each channel (channel walk), reads and patches your sketch, and can flash a compiled `.hex` onto the Mega. A first-run guide walks you through it. Everything is in the console's user manual: [`serial-web-console/README.md`](serial-web-console/README.md).
 
+![ShadowMD Lite web serial console (USB + blueprint)](serial-web-console/screenshot-console.png)
+
+---
+
+## 11. Joy-Con support
+
+ShadowMD Lite can run with a single Nintendo Switch Joy-Con in each hand instead of PS3 Navs: one hand, pocket size, analog stick, still in production. Same Mega ADK, same Bluetooth dongle. Driving with only the foot controller still works, as it does with one Nav.
+
+**Choosing the controller** is one line in [`ControllerConfig.h`](ControllerConfig.h), next to the sketch:
+
+```c
+#define USE_PS3_NAV        // original behaviour, two PS3 Navs
+//#define USE_JOYCON       // two Joy-Cons, left for the feet, right for the dome
+```
+
+**Library:** install the USB Host Shield version that matches the controller (see **§6.2**). A PS3 Nav build contains no Joy-Con code, so it compiles against the older library as before.
+
+**How it works:** the sketch no longer talks to `PS3BT` directly. `PS3NavFoot` and `PS3NavDome` are now `DroidPad` objects (`DroidPad.h`), a small shim that answers the same calls (`getButtonPress()`, `getAnalogHat()`, `PS3NavigationConnected`...) from either a PS3 Nav or a Joy-Con behind it. Every button map and MD code stays where it was.
+
+**What changes with Joy-Cons:** a Joy-Con has no L3, so the over speed toggle moves from `L3 + L1` to **stick click + ZL**, and the cross controller `dome arrow + foot L3` combos cannot be reached. In the stock map only one of those is assigned: **Up + L3, function 90 (random sounds, `$R`)**; move it to a free combo if you use it. Full button map, pairing steps and a bench test sketch that drives nothing are in [`JoyCon/`](JoyCon/README.md).
+
+**With ROS2D2:** if foot PS + L2 is bound to a mode, it switches that mode and the over speed toggle does not fire.
+
+**Pairing needs no re-upload.** On the first boot the droid opens a pairing session by itself: hold the sync button on the left Joy-Con until it vibrates, then on the right one. Every day after that, press any button on each Joy-Con and it calls the droid back. To pair again, hold **Minus + Capture** (left) or **Plus + Home** (right) for 5 seconds, reset the Mega three times in a row, or press **Pair Joy-Con** in the web console (it sends `JOYPAIR`). Each step plays an R2 sound, set in `ControllerConfig.h`. The whole guide, including what to do with a Joy-Con that has been used on a Switch, is in [`JoyCon/README.md`](JoyCon/README.md#pairing).
+
+| Build, Arduino Mega ADK | Flash | RAM |
+|---|---|---|
+| Before the controller layer, PS3 Nav | 49,660 | 4,463 (54%) |
+| PS3 Nav, older library | 50,432 | 4,569 (55%) |
+| Joy-Con, library 1.7.0, with pairing | 55,530 | 4,687 (57%) |
+
+**Status:** everything compiles. Pairing and reconnecting are bench-tested with two Joy-Cons. **Nothing has been driven on a droid yet.** Run `JoyCon/BenchTest` first and drive it in your workshop before taking it to an event.
+
+---
+
+## 12. Migrating from Shadow MD
+
+Coming from the classic Shadow MD sketch? [`MIGRATING_FROM_SHADOWMD.md`](MIGRATING_FROM_SHADOWMD.md)
+walks you through it step by step: back up, copy your settings and controller addresses, map your
+buttons, flash and test with the wheels in the air.
+
+---
+
+## 13. ROS2D2 (optional)
+
+[ROS2D2](https://github.com/BeskarCode/ROS2D2) adds a ROS 2 brain on a Raspberry Pi on top of
+ShadowMD Lite: the dome follows faces, and navigation modes (follow a colour, go to a point,
+and more on the way) are switched on from the controller. The Mega stays in charge of all the
+hardware: the controller always wins, and the Mega stops the feet and the dome if no command
+arrives from the Pi for 300 ms.
+
+It is all behind `#define ENABLE_ROS2D2`, **off by default**: with `0`, the sketch builds exactly
+as before. `ENABLE_DOME_TRACKER` (on by default) only lets a PC or the Pi turn the dome with
+`DM:<speed>`; it does nothing unless those commands arrive. The commands the Pi sends over USB are
+in [`PCSerialProtocol.md`](PCSerialProtocol.md) (section *ROS2D2*); the buttons in
+[`CheatSheet.md`](CheatSheet.md). ROS2D2 is still being tested on the droid.
+
+The classic Shadow MD also supports ROS2D2, in [SHADOW_MD_EEBEL](https://github.com/BeskarCode/SHADOW_MD_EEBEL).
