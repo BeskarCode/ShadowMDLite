@@ -48,7 +48,13 @@ public:
 
   bool isConnected() const override { return _real->isConnected() || _virt->isConnected(); }
 
-  void disconnect() override { _real->disconnect(); _virt->disconnect(); }
+  // Only the one driving: a real Nav that is not there must not be told anything (PS3BT would
+  // try to send on Bluetooth and print an L2CAP error)
+  void disconnect() override
+  {
+    if (_virtualWins || !_real->isConnected()) _virt->disconnect();
+    else _real->disconnect();
+  }
 
   uint32_t millisSinceLastMessage() const override
   {

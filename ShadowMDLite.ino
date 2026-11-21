@@ -3154,7 +3154,8 @@ void onInitPS3NavFoot()
       output += btAddress;
     #endif
     
-    if (btAddress == PS3ControllerFootMac || btAddress == PS3ControllerBackupFootMac)
+    // the console's virtual Nav (ROS:PAD) has no Bluetooth address: it is ours by definition
+    if (PS3NavFoot->controller()->isVirtual() || btAddress == PS3ControllerFootMac || btAddress == PS3ControllerBackupFootMac)
     {
         
           #ifdef SHADOW_DEBUG
@@ -3193,7 +3194,8 @@ void onInitPS3NavDome()
     isSecondaryPS3NavigatonInitialized = true;
     badPS3Data = 0;
     
-    if (btAddress == PS3ControllerDomeMAC || btAddress == PS3ControllerBackupDomeMAC)
+    // the console's virtual Nav (ROS:PAD) has no Bluetooth address: it is ours by definition
+    if (PS3NavDome->controller()->isVirtual() || btAddress == PS3ControllerDomeMAC || btAddress == PS3ControllerBackupDomeMAC)
     {
         
           #ifdef SHADOW_DEBUG

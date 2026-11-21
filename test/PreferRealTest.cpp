@@ -16,12 +16,13 @@ class FakeNav : public DroidController
 {
 public:
     bool connected = false;
+    int disconnects = 0;
     uint16_t want = 0;
     int16_t wx = 0, wy = 0;
     void begin() override {}
     void update() override { rememberPrevious(); setButtons(want); setStick(wx, wy); }
     bool isConnected() const override { return connected; }
-    void disconnect() override { connected = false; }
+    void disconnect() override { connected = false; disconnects++; }
     uint32_t millisSinceLastMessage() const override { return 5; }
     const char* name() const override { return "real"; }
 };
@@ -107,11 +108,37 @@ static void test_real_stick_counts_as_in_use()
     CHECK(pr.isConnected());
 }
 
+static void test_disconnect_only_touches_the_one_driving()
+{
+    // the sketch drops a controller it does not like: with the virtual one driving, the real
+    // (switched off) Nav must not be told anything (a PS3BT that is not there errors on L2CAP)
+    FakeNav real;
+    VirtualPadState s;
+    VirtualNavController v(s);
+    PadArbiter arb;
+    PreferRealController pr(&real, &v, arb, 15);
+    g_fakeMillis = 0;
+    feed(s, DB_SYS);
+    pr.update();
+    CHECK(pr.isVirtual());
+    pr.disconnect();
+    CHECK(real.disconnects == 0);
+    pr.update();
+    CHECK(!pr.isConnected());                     // the virtual one is gone until its next packet
+    real.connected = true;
+    real.want = DB_A;
+    g_fakeMillis = 100;
+    pr.update();
+    pr.disconnect();
+    CHECK(real.disconnects == 1);                 // the real one driving: it is the one dropped
+}
+
 int main()
 {
     test_virtual_nav_follows_packets_and_lets_go();
     test_prefer_real_switches_between_them();
     test_real_stick_counts_as_in_use();
+    test_disconnect_only_touches_the_one_driving();
     if (failures) { printf("PreferRealTest: %d failure(s)\n", failures); return 1; }
     printf("PreferRealTest: all passed\n");
     return 0;
