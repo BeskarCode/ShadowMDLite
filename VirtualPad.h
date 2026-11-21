@@ -13,8 +13,9 @@
 // Button bits, the same as DroidButton (DroidController.h): bit0 UP, 1 DOWN, 2 LEFT, 3 RIGHT,
 // 4 CROSS, 5 CIRCLE, 6 L1, 7 L2, 8 L3, 9 PS.
 //
-// Safety: the console sends a Nav's state 20 times a second while something is pressed. If it
-// stops (tab closed, WiFi gone, Pi restarting) the Nav lets everything go after
+// Safety: the console sends a Nav's state 20 times a second while its Remote window is open, at
+// rest too, like a real Nav. If it stops (window or tab closed, WiFi gone, Pi restarting) the Nav
+// lets everything go after
 // VPAD_RELEASE_MS, and counts as switched off after VPAD_DISCONNECT_MS, so the sketch's own
 // "controller lost" paths stop the feet and the dome. A real Nav in use always wins (PadArbiter).
 // ---------------------------------------------------------------------------------------

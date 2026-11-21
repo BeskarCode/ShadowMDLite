@@ -123,6 +123,38 @@ TRACK OFF <reason>     reason: button | controller | pi
 `FOOT_AUTO_ON_MD_FUNC` / `FOOT_AUTO_OFF_MD_FUNC` play a MarcDuino function (a sound, for example)
 when the mode goes on or off; 0 = silent.
 
+### Virtual PS3 Navs (`ENABLE_VIRTUAL_PAD`)
+
+The ROS2D2 web console's **Remote** window drives a foot and a dome PS3 Nav through the Pi, to try
+the droid at home without the real controllers. The sketch takes them exactly as real Navs: the
+same buttons do the same things (MarcDuino actions, the modes, face tracking, the sticks). Needs
+`ENABLE_ROS2D2`; with `#define ENABLE_VIRTUAL_PAD 0` (in `ShadowMDLite.ino`) the sketch is exactly as before. The pure logic is in `VirtualPad.h`, tested on a PC
+(`test/VirtualPadTest.cpp`, `test/PreferRealTest.cpp`).
+
+| Command | What it does | Reply |
+|---|---|---|
+| `ROS:PAD:<F\|D>,<buttons>,<x>,<y>` | One Nav's whole state: `F` foot, `D` dome; `buttons` 4 hex digits (upper case), `x` and `y` the stick 0..255 (128 = centre) | None |
+| `ROS:PAD:?` | Which Nav drives each slot | `PAD F:<real\|virtual\|none> D:<real\|virtual\|none>` |
+
+Button bits (as `DroidButton`): bit 0 UP, 1 DOWN, 2 LEFT, 3 RIGHT, 4 CROSS, 5 CIRCLE, 6 L1, 7 L2,
+8 L3, 9 PS. Example: foot PS + L2 is `ROS:PAD:F,0280,128,128`.
+
+Like a real Nav, the console sends each Nav's state all the time (20 a second) while its window is
+open, at rest too. The safety comes from that:
+
+- **A real Nav in use always wins**: a real Nav moved in the last 0.5 s takes the slot, and the
+  virtual one is ignored until the real one is still.
+- **Silence lets go**: 300 ms without a `ROS:PAD` for a Nav and its buttons are let go and its stick
+  centred; after 2 s it counts as switched off, so the sketch's own "controller lost" paths stop the
+  feet and the dome and switch the modes and face tracking off.
+- The virtual Nav has no Bluetooth address: the address check of `onInit` lets it through, and
+  dropping it never touches a real Nav.
+
+The Mega prints `PAD F:<...> D:<...>` every time a slot changes, and answers `ROS:PAD:?` the same
+way (the console asks on connecting, to know whether the firmware has the virtual Navs).
+Errors: `ERR PAD form`, `ERR PAD F|D`, `ERR PAD buttons`, `ERR PAD x,y`, `ERR PAD end` (short on
+purpose: every string costs Mega RAM); nothing changes on that Nav.
+
 ## Replies
 
 On valid `HELP` / `PING` / `S1` / `S3` / `MD`, the firmware may print lines such as:
