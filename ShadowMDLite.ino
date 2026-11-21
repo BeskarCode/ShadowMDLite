@@ -627,6 +627,12 @@ int marcDuinoBaudRate = 9600; // Set the baud rate for the Syren motor controlle
 // Controller abstraction: pick PS3 Navs or Joy-Cons in ControllerConfig.h
 #include "ControllerConfig.h"
 #include "DroidPad.h"
+#if defined(ENABLE_VIRTUAL_PAD) && defined(USE_PS3_NAV) && ENABLE_ROS2D2
+  #define VIRTUAL_PAD_ON
+  #include "VirtualPad.h"
+  #include "VirtualNavController.h"
+  #include "PreferRealController.h"
+#endif
 
 #ifdef CANBUS
   #include <mcp_can.h>
@@ -704,8 +710,21 @@ BTD Btd(&Usb);
 #ifdef USE_PS3_NAV
   PS3NavController navFootImpl(&Btd, "FOOT", LED1);
   PS3NavController navDomeImpl(&Btd, "DOME", LED2);
-  DroidPad footPad(&navFootImpl, &navFootImpl);
-  DroidPad domePad(&navDomeImpl, &navDomeImpl);
+  #ifdef VIRTUAL_PAD_ON
+    // Each slot: the real Nav, or the console's virtual one while the real one is not in use
+    VirtualPadState      vpadFootState, vpadDomeState;
+    VirtualNavController vnavFoot(vpadFootState), vnavDome(vpadDomeState);
+    PadArbiter           arbFoot, arbDome;
+    PreferRealController footPrefer(&navFootImpl, &vnavFoot, arbFoot, joystickFootDeadZoneRange);
+    PreferRealController domePrefer(&navDomeImpl, &vnavDome, arbDome, joystickDomeDeadZoneRange);
+    DroidPad footPad(&footPrefer, &navFootImpl);
+    DroidPad domePad(&domePrefer, &navDomeImpl);
+    void printPadState();   // below (inside #ifdef: Arduino does not prototype those)
+    void padStateCheck();
+  #else
+    DroidPad footPad(&navFootImpl, &navFootImpl);
+    DroidPad domePad(&navDomeImpl, &navDomeImpl);
+  #endif
 #else
   JoyConController joyFootImpl(&Btd, JOYCON_LEFT,  "FOOT", JOYCON_PAIRING_MODE);
   JoyConController joyDomeImpl(&Btd, JOYCON_RIGHT, "DOME", JOYCON_PAIRING_MODE);
@@ -969,6 +988,30 @@ static void domeTrackerCommand(long speed)
 }
 #endif
 
+#ifdef VIRTUAL_PAD_ON
+// "PAD F:<real|virtual|none> D:<...>" for the Pi (the console warns when a real Nav is on)
+void printPadState()
+{
+  char buf[32];
+  padReport(buf, sizeof(buf), footPrefer.who(), domePrefer.who());
+  Serial.println(buf);
+}
+
+void padStateCheck()
+{
+  static const char* lastFoot = NULL;
+  static const char* lastDome = NULL;
+  const char* f = footPrefer.who();
+  const char* d = domePrefer.who();
+  if (f != lastFoot || d != lastDome)
+  {
+    lastFoot = f;
+    lastDome = d;
+    printPadState();
+  }
+}
+#endif
+
 #if ENABLE_ROS2D2
 static void printAutoState()
 {
@@ -1213,6 +1256,21 @@ static void processPCSerialLine(const char* line)
     Serial.println(F(")"));
     return;
   }
+
+#ifdef VIRTUAL_PAD_ON
+  // ROS:PAD: the console's virtual Navs (VirtualPad.h). Silent when accepted (20 a second).
+  {
+    PadPacket pk;
+    const char* err = NULL;
+    switch (parsePadCommand(p, pk, err))
+    {
+      case PAD_PACKET: (pk.pad ? vpadDomeState : vpadFootState).feed(pk, millis()); return;
+      case PAD_QUERY:  printPadState(); return;
+      case PAD_BAD:    Serial.print(F("ERR ")); Serial.println(err); return;
+      default:         break;
+    }
+  }
+#endif
 
 #if ENABLE_ROS2D2
   // ROS2D2 commands: ROS:FOOT:, ROS:AUTO:, ROS:DOME: (see FootAuto.h)
@@ -3507,6 +3565,9 @@ boolean readUSB()
      // Controller abstraction: refresh both controllers once per loop, right after Usb.Task().
      // With Joy-Cons this also puts the left half on the feet and the right on the dome.
      DroidPad::updatePair(*PS3NavFoot, *PS3NavDome);
+     #ifdef VIRTUAL_PAD_ON
+       padStateCheck();        // tells the Pi when a Nav slot changes between real, virtual and none
+     #endif
 
      #ifdef USE_JOYCON
        // While pairing, the droid does not move and the controllers are not read.
