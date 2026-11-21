@@ -59,21 +59,22 @@ inline bool vpadByte(const char*& p, uint8_t& out)
 }
 
 // ROS:PAD lines. The packet is only written when the whole line is good; a bad line leaves it as
-// it was and says why in error (no "ERR " prefix).
+// it was and says why in error (no "ERR " prefix). The reasons are short on purpose: on a Mega
+// every string lives in its scarce RAM.
 inline PadParse parsePadCommand(const char* line, PadPacket& out, const char*& error)
 {
     static const char PREFIX[] = "ROS:PAD:";
     if (strncmp(line, "ROS:PAD", 7) != 0) return PAD_NOT_MINE;
-    if (strncmp(line, PREFIX, sizeof(PREFIX) - 1) != 0) { error = "ROS:PAD:<F|D>,<buttons>,<x>,<y> or ROS:PAD:?"; return PAD_BAD; }
+    if (strncmp(line, PREFIX, sizeof(PREFIX) - 1) != 0) { error = "PAD form"; return PAD_BAD; }
     const char* p = line + sizeof(PREFIX) - 1;
     if (p[0] == '?' && p[1] == 0) return PAD_QUERY;
 
     PadPacket pk;
     if (*p == 'F') pk.pad = 0;
     else if (*p == 'D') pk.pad = 1;
-    else { error = "ROS:PAD: pad must be F or D"; return PAD_BAD; }
+    else { error = "PAD F|D"; return PAD_BAD; }
     p++;
-    if (*p++ != ',') { error = "ROS:PAD: comma after the pad"; return PAD_BAD; }
+    if (*p++ != ',') { error = "PAD form"; return PAD_BAD; }
 
     unsigned b = 0;
     for (int i = 0; i < 4; i++, p++)
@@ -82,18 +83,18 @@ inline PadParse parsePadCommand(const char* line, PadPacket& out, const char*& e
         unsigned d;
         if (c >= '0' && c <= '9') d = (unsigned)(c - '0');
         else if (c >= 'A' && c <= 'F') d = (unsigned)(c - 'A' + 10);
-        else { error = "ROS:PAD: buttons are 4 upper case hex digits"; return PAD_BAD; }
+        else { error = "PAD buttons"; return PAD_BAD; }
         b = (b << 4) | d;
     }
-    if (b & ~VPAD_BUTTONS_MASK) { error = "ROS:PAD: unknown button bits"; return PAD_BAD; }
+    if (b & ~VPAD_BUTTONS_MASK) { error = "PAD buttons"; return PAD_BAD; }
     pk.buttons = (uint16_t)b;
 
     if (*p++ != ',' || !vpadByte(p, pk.x) || *p++ != ',' || !vpadByte(p, pk.y))
     {
-        error = "ROS:PAD: x and y are 0..255";
+        error = "PAD x,y";
         return PAD_BAD;
     }
-    if (*p != 0) { error = "ROS:PAD: nothing may follow y"; return PAD_BAD; }
+    if (*p != 0) { error = "PAD end"; return PAD_BAD; }
     out = pk;
     return PAD_PACKET;
 }

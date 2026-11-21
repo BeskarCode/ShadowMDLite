@@ -181,6 +181,12 @@ int CustomSongMax = 8; //Total Number of Custom Songs
 // as before. Off by default, so existing droids (and the DomeTracker PoC, whose DM: would
 // then need PS + L2 on the dome Nav first) keep working unchanged.
 #define ENABLE_ROS2D2 0
+// Virtual PS3 Navs: the ROS2D2 web console's "Remote" window drives a foot and a dome Nav over
+// the Pi's serial line (ROS:PAD, see VirtualPad.h). A real Nav in use always wins; if the console
+// goes quiet the virtual Nav lets go in 0.3 s and is switched off in 2 s. Needs ENABLE_ROS2D2.
+// 0 = off: the sketch is exactly as before.
+#define ENABLE_VIRTUAL_PAD 1
+#define VIRTUAL_PAD_ON (ENABLE_ROS2D2 && ENABLE_VIRTUAL_PAD)
 #define FOOT_AUTO_MAX_DRIVE   40       // |ROS:FOOT: drive| clamp; keep below drivespeed1 (70)
 #define FOOT_AUTO_MAX_TURN    30       // |ROS:FOOT: turn| clamp; keep below turnspeed (50)
 #define FOOT_AUTO_TIMEOUT_MS  300      // no ROS:FOOT: for this long -> the feet stop
@@ -623,6 +629,14 @@ int marcDuinoBaudRate = 9600; // Set the baud rate for the Syren motor controlle
 // ---------------------------------------------------------------------------------------
 #include <PS3BT.h>
 #include <usbhub.h>
+// The controller layer shared with the classic Shadow MD: the sketch keeps its PS3BT calls
+// (DroidPad answers them), and a Nav slot can be fed by the console's virtual Nav.
+#include "DroidController.h"
+#include "PS3NavController.h"
+#include "DroidPad.h"
+#include "VirtualPad.h"
+#include "VirtualNavController.h"
+#include "PreferRealController.h"
 
 #ifdef CANBUS
   #include <mcp_can.h>
@@ -693,10 +707,25 @@ Sabertooth *SyR=new Sabertooth(SYREN_ADDR, Serial2);
 ///////Setup for USB and Bluetooth Devices////////////////////////////
 USB Usb;
 BTD Btd(&Usb);
-PS3BT PS3NavFootImpl(&Btd);
-PS3BT PS3NavDomeImpl(&Btd);
-PS3BT* PS3NavFoot=&PS3NavFootImpl;
-PS3BT* PS3NavDome=&PS3NavDomeImpl;
+PS3NavController PS3NavFootImpl(&Btd, "FOOT", LED1);
+PS3NavController PS3NavDomeImpl(&Btd, "DOME", LED2);
+#if VIRTUAL_PAD_ON
+// Each slot: the real Nav, or the console's virtual one while the real one is not in use
+VirtualPadState      vpadFootState, vpadDomeState;
+VirtualNavController vnavFoot(vpadFootState), vnavDome(vpadDomeState);
+PadArbiter           arbFoot, arbDome;
+PreferRealController footPrefer(&PS3NavFootImpl, &vnavFoot, arbFoot, joystickFootDeadZoneRange);
+PreferRealController domePrefer(&PS3NavDomeImpl, &vnavDome, arbDome, joystickDomeDeadZoneRange);
+DroidPad footPad(&footPrefer, &PS3NavFootImpl);
+DroidPad domePad(&domePrefer, &PS3NavDomeImpl);
+void printPadState();   // below (inside #if: Arduino does not prototype those)
+void padStateCheck();
+#else
+DroidPad footPad(&PS3NavFootImpl, &PS3NavFootImpl);
+DroidPad domePad(&PS3NavDomeImpl, &PS3NavDomeImpl);
+#endif
+DroidPad* PS3NavFoot=&footPad;
+DroidPad* PS3NavDome=&domePad;
 
 #ifdef CANBUS
 MCP_CAN CAN0(SS);   // Set CS to pin SS
@@ -803,6 +832,8 @@ void setup()
 
     //Setup for PS3
     Serial.print(F("\r\nRegistering Controller Events... "));
+    PS3NavFoot->begin();
+    PS3NavDome->begin();
     PS3NavFoot->attachOnInit(onInitPS3NavFoot); // onInitPS3NavFoot is called upon a new connection
     PS3NavDome->attachOnInit(onInitPS3NavDome); 
     Serial.print(F("done.\r\n"));
@@ -915,6 +946,30 @@ static void domeTrackerCommand(long speed)
   if (speed < -DOME_TRACKER_MAX_SPEED) speed = -DOME_TRACKER_MAX_SPEED;
   domeTrackerSpeed = (int)speed;
   domeTrackerLastMs = millis();
+}
+#endif
+
+#if VIRTUAL_PAD_ON
+// "PAD F:<real|virtual|none> D:<...>" for the Pi (the console warns when a real Nav is on)
+void printPadState()
+{
+  char buf[32];
+  padReport(buf, sizeof(buf), footPrefer.who(), domePrefer.who());
+  Serial.println(buf);
+}
+
+void padStateCheck()
+{
+  static const char* lastFoot = NULL;
+  static const char* lastDome = NULL;
+  const char* f = footPrefer.who();
+  const char* d = domePrefer.who();
+  if (f != lastFoot || d != lastDome)
+  {
+    lastFoot = f;
+    lastDome = d;
+    printPadState();
+  }
 }
 #endif
 
@@ -1152,6 +1207,21 @@ static void processPCSerialLine(const char* line)
     return;
   }
 
+#if VIRTUAL_PAD_ON
+  // ROS:PAD: the console's virtual Navs (VirtualPad.h). Silent when accepted (20 a second).
+  {
+    PadPacket pk;
+    const char* err = NULL;
+    switch (parsePadCommand(p, pk, err))
+    {
+      case PAD_PACKET: (pk.pad ? vpadDomeState : vpadFootState).feed(pk, millis()); return;
+      case PAD_QUERY:  printPadState(); return;
+      case PAD_BAD:    Serial.print(F("ERR ")); Serial.println(err); return;
+      default:         break;
+    }
+  }
+#endif
+
 #if ENABLE_ROS2D2
   // ROS2D2 commands: ROS:FOOT:, ROS:AUTO:, ROS:DOME: (see FootAuto.h)
   RosCmd ros = parseRosCommand(p);
@@ -1280,6 +1350,11 @@ void loop()
     }
 
     Usb.Task();
+    // the controller layer: refresh both Nav slots once per loop, right after Usb.Task()
+    DroidPad::updatePair(*PS3NavFoot, *PS3NavDome);
+#if VIRTUAL_PAD_ON
+    padStateCheck();        // tells the Pi when a Nav slot changes between real, virtual and none
+#endif
 
     breadcrumb.uptimeMs = millis();   // reset diagnostics: last known uptime
 
@@ -1352,7 +1427,7 @@ void loop()
 //           footDrive Motor Control Section
 // =======================================================================================
 
-boolean ps3FootMotorDrive(PS3BT* myPS3 = PS3NavFoot)
+boolean ps3FootMotorDrive(DroidPad* myPS3 = PS3NavFoot)
 {
   int stickSpeed = 0;
   int turnnum = 0;
@@ -1605,7 +1680,7 @@ void footAutoDrive()
 //           domeDrive Motor Control Section
 // =======================================================================================
 
-int ps3DomeDrive(PS3BT* myPS3 = PS3NavDome)
+int ps3DomeDrive(DroidPad* myPS3 = PS3NavDome)
 {
     int domeRotationSpeed = 0;
       
@@ -1741,7 +1816,7 @@ void domeDrive()
 //                               Toggle Control Section
 // =======================================================================================
 
-void ps3ToggleSettings(PS3BT* myPS3 = PS3NavFoot)
+void ps3ToggleSettings(DroidPad* myPS3 = PS3NavFoot)
 {
 
     // enable / disable drive stick
