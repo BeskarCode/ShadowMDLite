@@ -388,4 +388,10 @@ as before. `ENABLE_DOME_TRACKER` (on by default) only lets a PC or the Pi turn t
 in [`PCSerialProtocol.md`](PCSerialProtocol.md) (section *ROS2D2*); the buttons in
 [`CheatSheet.md`](CheatSheet.md). ROS2D2 is still being tested on the droid.
 
+With `ENABLE_VIRTUAL_PAD` (in `ControllerConfig.h`, needs `USE_PS3_NAV`) the ROS2D2 console's
+**Remote** window drives two virtual PS3 Navs, to try the droid at home without the real
+controllers; a real Nav in use always wins, and if the console goes quiet the virtual Nav lets go
+in 0.3 s and is switched off in 2 s. Commands (`ROS:PAD`) in
+[`PCSerialProtocol.md`](PCSerialProtocol.md), section *Virtual PS3 Navs*.
+
 The classic Shadow MD also supports ROS2D2, in [SHADOW_MD_EEBEL](https://github.com/BeskarCode/SHADOW_MD_EEBEL).
