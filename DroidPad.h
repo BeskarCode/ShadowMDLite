@@ -88,7 +88,7 @@ public:
   // watchdog in millisSinceLastMessage() is what actually catches a dead link.
   bool getStatus(StatusEnum s)
   {
-    if (_nav) return _nav->raw()->getStatus(s);
+    if (_nav && !_impl->isVirtual()) return _nav->raw()->getStatus(s);
     if (s == Plugged)   return _impl->isConnected();
     if (s == Unplugged) return !_impl->isConnected();
     return false;
@@ -119,7 +119,7 @@ private:
 
     // Shadow checks "Navigation or full DualShock". Only a real PS3BT can answer the
     // second half, and on anything else it is simply false.
-    PS3Connected = _nav ? _nav->raw()->PS3Connected : false;
+    PS3Connected = (_nav && !_impl->isVirtual()) ? _nav->raw()->PS3Connected : false;
   }
 
   static uint16_t role(ButtonEnum b)

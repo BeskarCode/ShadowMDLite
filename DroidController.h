@@ -126,6 +126,10 @@ public:
   // The slot this controller belongs in, once it knows. SLOT_ANY keeps it where it is.
   virtual DroidSlot preferredSlot() const { return SLOT_ANY; }
 
+  // True while the console's virtual Nav (ROS:PAD) is the one driving: a real PS3BT behind the
+  // same DroidPad must not be asked then (it is off, and would read as bad data).
+  virtual bool isVirtual() const { return false; }
+
 protected:
   // Implementations fill these in during update() and call rememberPrevious() first.
   void rememberPrevious() { _prevButtons = _buttons; }
