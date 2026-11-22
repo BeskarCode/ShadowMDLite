@@ -166,7 +166,7 @@ int CustomSongMax = 8; //Total Number of Custom Songs
 #define DOME_TRACKER_MANUAL_HOLD_MS  2000
 
 // ROS2D2 adds two kinds of mode, each switched on only from a controller:
-//  - Autonomous modes (goto, forward, patrol, follow): each one is switched on by a controller
+//  - Autonomous modes (goto, forward, patrol, follow, free): each one is switched on by a controller
 //    combo (by default PS + L2 on the foot Nav -> goto; the Pi assigns others with
 //    ROS:BIND:<COMBO>,<mode>, and an assigned combo no longer fires its MarcDuino function).
 //    The combo of the mode that is on switches it off; another mode's combo switches to it.

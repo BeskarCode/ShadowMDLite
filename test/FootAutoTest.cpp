@@ -123,6 +123,22 @@ static void mode_names()
     CHECK(modeFromName("fly", 3) == MODE_NONE);
 }
 
+// Free roam: the last mode, so the others keep their numbers (modes.yaml, the Pi, saved bindings)
+static void free_mode_is_the_last()
+{
+    CHECK(!strcmp(modeName(MODE_FREE), "free"));
+    CHECK(modeFromName("free", 4) == MODE_FREE);
+    CHECK(MODE_FOLLOW == 4 && MODE_FREE == 5);
+    RosCmd c = parseRosCommand("ROS:BIND:FOOT_UP_PS,free");
+    CHECK(c.kind == ROS_BIND && c.b == MODE_FREE);
+    ComboBindings b;
+    CHECK(b.bind(c.a, MODE_FREE));
+    CHECK(b.modeFor(c.a) == MODE_FREE);
+    FootAuto fa(FootAutoConfig{40, 30, 300, 4});
+    CHECK(fa.press(MODE_FREE));
+    CHECK(fa.on() && fa.mode() == MODE_FREE);
+}
+
 // --- commands, ramp and timeout -----------------------------------------------------------
 
 static void command_is_clamped()
@@ -432,6 +448,7 @@ int main()
     bind_replace_free_and_full();
     combo_names();
     mode_names();
+    free_mode_is_the_last();
     turn_off_when_off_returns_false();
     command_is_clamped();
     ramp_limits_each_tick();

@@ -32,7 +32,8 @@ inline char rosFlashChar(const char* p) { return *p; }
 enum FootAutoReason : uint8_t { FA_BOOT, FA_BUTTON, FA_STICK, FA_CONTROLLER, FA_PI };
 
 // The autonomous modes. Each one is switched on by its own controller combo (ComboBindings).
-enum RosMode : uint8_t { MODE_NONE = 0, MODE_GOTO, MODE_FORWARD, MODE_PATROL, MODE_FOLLOW };
+// New ones go at the end: the others keep their numbers.
+enum RosMode : uint8_t { MODE_NONE = 0, MODE_GOTO, MODE_FORWARD, MODE_PATROL, MODE_FOLLOW, MODE_FREE };
 
 inline const char* modeName(RosMode m)
 {
@@ -42,6 +43,7 @@ inline const char* modeName(RosMode m)
         case MODE_FORWARD: return "forward";
         case MODE_PATROL:  return "patrol";
         case MODE_FOLLOW:  return "follow";
+        case MODE_FREE:    return "free";
         default:           return "none";
     }
 }
@@ -77,7 +79,7 @@ inline bool nameEqualsFlash(const char* name, size_t len, const char* lit)
 // MODE_NONE when the name is not a mode (and for "none").
 inline RosMode modeFromName(const char* name, size_t len)
 {
-    for (uint8_t m = MODE_GOTO; m <= MODE_FOLLOW; m++)
+    for (uint8_t m = MODE_GOTO; m <= MODE_FREE; m++)
         if (nameEquals(name, len, modeName((RosMode)m))) return (RosMode)m;
     return MODE_NONE;
 }
